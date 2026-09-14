@@ -12,6 +12,7 @@ from ..abcs.database_types import (
     FractionalType,
     Boolean,
     Date,
+    StringType,
 )
 from ..abcs.mixins import AbstractMixin_MD5, AbstractMixin_NormalizeValue
 from .base import BaseDialect, ThreadedDatabase, import_helper, ConnectError, Mixin_Schema
@@ -44,6 +45,9 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
     def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
         return self.to_string(f"{value}::int")
+
+    def normalize_text(self, value: str, coltype: StringType) -> str:
+        return f"NULLIF({value}::varchar, '')"
 
 
 class PostgresqlDialect(BaseDialect, Mixin_Schema):
