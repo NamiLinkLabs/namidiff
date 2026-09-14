@@ -35,6 +35,12 @@ DATABASE_BY_SCHEME = {
 class Connect_SetUTC(Connect):
     __doc__ = Connect.__call__.__doc__
 
+    def __call__(self, db_conf, thread_count=1, shared=True, empty_string_as_null=False):
+        db = super().__call__(db_conf, thread_count=thread_count, shared=shared)
+        if empty_string_as_null:
+            db.enable_empty_string_as_null()
+        return db
+
     def _connection_created(self, db):
         db = super()._connection_created(db)
         try:

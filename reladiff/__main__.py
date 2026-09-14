@@ -199,6 +199,12 @@ click.Context.formatter_class = MyHelpFormatter
     help="An additional 'where' expression to restrict the search space. Beware of SQL Injection!",
     metavar="EXPR",
 )
+@click.option(
+    "--empty-string-as-null",
+    is_flag=True,
+    help="Treat empty strings as NULL when normalizing text values, on both databases. "
+    "Useful to avoid spurious diffs when one database stores '' and the other stores NULL.",
+)
 @click.option("-a", "--algorithm", default=Algorithm.AUTO.value, type=click.Choice([i.value for i in Algorithm]))
 @click.option(
     "--conf",
@@ -252,6 +258,7 @@ def _main(
     case_sensitive,
     json_output,
     where,
+    empty_string_as_null,
     assume_unique_key,
     skip_sort_results,
     sample_exclusive_rows,
@@ -314,11 +321,11 @@ def _main(
         )
         return
 
-    db1 = connect(database1, threads1 or threads)
+    db1 = connect(database1, threads1 or threads, empty_string_as_null=empty_string_as_null)
     if database1 == database2:
         db2 = db1
     else:
-        db2 = connect(database2, threads2 or threads)
+        db2 = connect(database2, threads2 or threads, empty_string_as_null=empty_string_as_null)
 
     options = dict(
         case_sensitive=case_sensitive,
