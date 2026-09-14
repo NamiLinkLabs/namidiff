@@ -278,6 +278,8 @@ class BaseDialect(AbstractDialect):
         # See: https://en.wikipedia.org/wiki/Single-precision_floating-point_format
         return math.floor(math.log(2**p, 10))
 
+    empty_string_as_null: bool = False
+
     @classmethod
     def load_mixins(cls, *abstract_mixins) -> "Self":
         mixins = {m for m in cls.MIXINS if issubclass(m, abstract_mixins)}
@@ -600,6 +602,20 @@ class Database(AbstractDatabase[T]):
 
         _DatabaseWithMixins.__name__ = cls.__name__
         return _DatabaseWithMixins
+
+    def enable_empty_string_as_null(self) -> None:
+        """Configure this database instance to treat empty strings as NULL when normalizing text.
+
+        Creates a per-instance dialect copy so other connections sharing the same
+        dialect class are not affected.
+        """
+        dialect_cls = type(self.dialect)
+
+        class _DialectWithEmptyStringAsNull(dialect_cls):
+            empty_string_as_null = True
+
+        _DialectWithEmptyStringAsNull.__name__ = dialect_cls.__name__
+        self.dialect = _DialectWithEmptyStringAsNull()
 
     def commit(self):
         return self.query(commit)
