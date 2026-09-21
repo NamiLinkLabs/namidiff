@@ -1,6 +1,6 @@
 [project]
 name = "namidiff"
-version = "0.6.8"
+version = "0.6.9"
 description = "Efficiently diff rows across two different databases. Fork of reladiff (itself a fork of data-diff). Python package and CLI are both `namidiff`."
 readme = "README.md"
 license = { text = "MIT" }
