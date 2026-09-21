@@ -47,7 +47,9 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         return self.to_string(f"{value}::int")
 
     def normalize_text(self, value: str, coltype: StringType) -> str:
-        return f"NULLIF({value}::varchar, '')"
+        if self.empty_string_as_null:
+            return f"NULLIF({value}::varchar, '')"
+        return self.to_string(value)
 
 
 class PostgresqlDialect(BaseDialect, Mixin_Schema):

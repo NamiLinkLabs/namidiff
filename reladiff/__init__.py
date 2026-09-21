@@ -17,6 +17,7 @@ def connect_to_table(
     table_name: Union[DbPath, str],
     key_columns: Union[str, Sequence[str]] = ("id",),
     thread_count: Optional[int] = 1,
+    empty_string_as_null: bool = False,
     **kwargs,
 ) -> TableSegment:
     """Connects to the given database, and creates a TableSegment instance
@@ -26,6 +27,7 @@ def connect_to_table(
         table_name: Name of the table as a string, or a tuple that signifies the path.
         key_columns: Names of the key columns
         thread_count: Number of threads for this connection (only if using a threadpooled db implementation)
+        empty_string_as_null: Treat empty strings as NULL when normalizing text values, on this database instance.
 
     See Also:
         :meth:`connect`
@@ -34,8 +36,10 @@ def connect_to_table(
         key_columns = (key_columns,)
     if isinstance(db_info, AbstractDatabase):
         db = db_info
+        if empty_string_as_null:
+            db.enable_empty_string_as_null()
     else:
-        db = connect(db_info, thread_count=thread_count)
+        db = connect(db_info, thread_count=thread_count, empty_string_as_null=empty_string_as_null)
 
     if isinstance(table_name, str):
         table_name = db.parse_table_name(table_name)
@@ -87,6 +91,8 @@ def diff_tables(
     allow_empty_tables: bool = False,
     # Skip sorting the hashdiff output by key for better performance. (hashdiff only)
     skip_sort_results: bool = False,
+    # Treat empty strings as NULL when normalizing text values, on both databases.
+    empty_string_as_null: bool = False,
 ) -> DiffResultWrapper:
     """Finds the diff between table1 and table2.
 
@@ -121,6 +127,8 @@ def diff_tables(
         table_write_limit (int): Maximum number of rows to write when materializing, per thread.
         allow_empty_tables (bool): If false, diffing on empty tables raises an EmptyTable(ValueError) exception.
         skip_sort_results (bool): Skip sorting the hashdiff output by key for better performance. (used for `HASHDIFF`. default: False)
+        empty_string_as_null (bool): Treat empty strings as NULL when normalizing text values, on both databases.
+                                     Useful to avoid spurious diffs when one database stores '' and the other stores NULL.
 
     Note:
         The following parameters are used to override the corresponding attributes of the given :class:`TableSegment` instances:
@@ -165,6 +173,10 @@ def diff_tables(
     }
 
     segments = [t.new(**override_attrs) for t in tables] if override_attrs else tables
+
+    if empty_string_as_null:
+        for db in dict.fromkeys(t.database for t in segments):
+            db.enable_empty_string_as_null()
 
     algorithm = Algorithm(algorithm)
     if algorithm == Algorithm.AUTO:

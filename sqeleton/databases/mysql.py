@@ -51,10 +51,9 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         return f"TRIM(CAST({value} AS char))"
 
     def normalize_text(self, value: str, coltype: StringType) -> str:
-        # MySQL stores empty string as '' while other databases (e.g. Snowflake)
-        # store the same logical "no value" as NULL. Treat '' as NULL so that
-        # cross-database comparisons don't produce spurious diffs.
-        return f"NULLIF(cast({value} as char), '')"
+        if self.empty_string_as_null:
+            return f"NULLIF(cast({value} as char), '')"
+        return self.to_string(value)
 
 
 class Mixin_Regex(AbstractMixin_Regex):

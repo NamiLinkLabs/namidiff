@@ -75,7 +75,9 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         return self.to_string(f"{value}::int")
 
     def normalize_text(self, value: str, coltype: StringType) -> str:
-        return f"NULLIF(cast({value} as string), '')"
+        if self.empty_string_as_null:
+            return f"NULLIF(cast({value} as string), '')"
+        return self.to_string(value)
 
 
 class Mixin_Schema(AbstractMixin_Schema):
