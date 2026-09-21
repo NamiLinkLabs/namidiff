@@ -53,7 +53,19 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         return f"CAST(TRIM({value}) AS VARCHAR(36))"
 
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        return f"to_char(cast({value} as timestamp(3)), 'YYYY-MM-DD HH24:MI:SS.FF3')"
+        if self.timestamp_precision is not None:
+            p = self.timestamp_precision
+            # to_char truncates; cast so DATE columns accept FF
+            return f"to_char(cast({value} as timestamp(9)), 'YYYY-MM-DD HH24:MI:SS.FF{p}')"
+
+        if coltype.rounds:
+            return f"to_char(cast({value} as timestamp({coltype.precision})), 'YYYY-MM-DD HH24:MI:SS.FF6')"
+
+        if coltype.precision > 0:
+            truncated = f"to_char({value}, 'YYYY-MM-DD HH24:MI:SS.FF{coltype.precision}')"
+        else:
+            truncated = f"to_char({value}, 'YYYY-MM-DD HH24:MI:SS.')"
+        return f"RPAD({truncated}, {TIMESTAMP_PRECISION_POS+6}, '0')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         # FM999.9990
@@ -77,6 +89,7 @@ class Mixin_Schema(AbstractMixin_Schema):
 
 class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
     name = "Oracle"
+    SUPPORTS_TIMESTAMP_PRECISION = True
     SUPPORTS_PRIMARY_KEY = True
     SUPPORTS_INDEXES = True
     TYPE_CLASSES: Dict[str, type] = {

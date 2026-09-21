@@ -205,6 +205,13 @@ click.Context.formatter_class = MyHelpFormatter
     help="Treat empty strings as NULL when normalizing text values, on both databases. "
     "Useful to avoid spurious diffs when one database stores '' and the other stores NULL.",
 )
+@click.option(
+    "--timestamp-precision",
+    default=None,
+    type=click.IntRange(1, 6),
+    help="Normalize timestamps to this many fractional digits, on both databases, regardless of column precision. "
+    "E.g. 3 when one side is replicated at millisecond precision (like AWS DMS).",
+)
 @click.option("-a", "--algorithm", default=Algorithm.AUTO.value, type=click.Choice([i.value for i in Algorithm]))
 @click.option(
     "--conf",
@@ -259,6 +266,7 @@ def _main(
     json_output,
     where,
     empty_string_as_null,
+    timestamp_precision,
     assume_unique_key,
     skip_sort_results,
     sample_exclusive_rows,
@@ -321,11 +329,21 @@ def _main(
         )
         return
 
-    db1 = connect(database1, threads1 or threads, empty_string_as_null=empty_string_as_null)
+    db1 = connect(
+        database1,
+        threads1 or threads,
+        empty_string_as_null=empty_string_as_null,
+        timestamp_precision=timestamp_precision,
+    )
     if database1 == database2:
         db2 = db1
     else:
-        db2 = connect(database2, threads2 or threads, empty_string_as_null=empty_string_as_null)
+        db2 = connect(
+            database2,
+            threads2 or threads,
+            empty_string_as_null=empty_string_as_null,
+            timestamp_precision=timestamp_precision,
+        )
 
     options = dict(
         case_sensitive=case_sensitive,

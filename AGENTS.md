@@ -85,6 +85,8 @@ normalize_value_by_type(value, coltype)
 
 To fix cross-database string comparison bugs (e.g. MySQL `''` vs Snowflake `NULL`): override `normalize_text()` in the database's `Mixin_NormalizeValue`. MySQL's override emits `NULLIF(cast({value} as char), '')` so that empty strings hash identically to NULLs on the other side.
 
+Timestamps are normalized to the column precision, padded to 6 digits. `timestamp_precision` (dialect attribute, set per connection via `Database.set_timestamp_precision()` / `diff_tables(timestamp_precision=...)` / `--timestamp-precision`) instead truncates to N digits and emits N digits, e.g. 3 for AWS DMS replicas. Supported by dialects with `SUPPORTS_TIMESTAMP_PRECISION = True` (MySQL, PostgreSQL, Redshift, Oracle, Snowflake, DuckDB).
+
 ## Running tests
 
 ```bash

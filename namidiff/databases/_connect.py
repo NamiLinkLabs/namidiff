@@ -35,10 +35,22 @@ DATABASE_BY_SCHEME = {
 class Connect_SetUTC(Connect):
     __doc__ = Connect.__call__.__doc__
 
-    def __call__(self, db_conf, thread_count=1, shared=True, empty_string_as_null=False):
+    def __call__(self, db_conf, thread_count=1, shared=True, empty_string_as_null=False, timestamp_precision=None):
+        """Connect to a database, like :meth:`namidiff.sqeleton.connect`, applying namidiff's normalization options.
+
+        Parameters:
+            db_conf (str | dict): The configuration for the database to connect. URI or dict.
+            thread_count (int, optional): Size of the threadpool. Ignored by cloud databases. (default: 1)
+            shared (bool): Whether to cache and return the same connection for the same db_conf. (default: True)
+            empty_string_as_null (bool): Treat empty strings as NULL when normalizing text values. (default: False)
+            timestamp_precision (int, optional): Normalize timestamps to this many fractional digits (1-6),
+                                                 truncating the rest. (default: column precision)
+        """
         db = super().__call__(db_conf, thread_count=thread_count, shared=shared)
         if empty_string_as_null:
             db.enable_empty_string_as_null()
+        if timestamp_precision is not None:
+            db.set_timestamp_precision(timestamp_precision)
         return db
 
     def _connection_created(self, db):

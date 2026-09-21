@@ -12,6 +12,7 @@ from runtype import dataclass
 
 from namidiff.sqeleton.databases import Database, MySQL, BigQuery, Presto, Oracle, Snowflake, DbPath
 from namidiff.sqeleton.abcs import NumericType
+from namidiff.sqeleton.abcs.database_types import TemporalType
 from namidiff.sqeleton.queries import (
     table,
     sum_,
@@ -27,7 +28,7 @@ from namidiff.sqeleton.queries import (
     this,
     Compiler,
 )
-from namidiff.sqeleton.queries.ast_classes import Concat, Count, Expr, Random, TablePath, Code, ITable
+from namidiff.sqeleton.queries.ast_classes import Concat, Count, Expr, Random, TablePath, Code, ITable, IsDistinctFrom
 from namidiff.sqeleton.queries.extras import NormalizeAsString
 
 from .info_tree import InfoTree
@@ -314,7 +315,13 @@ class JoinDiffer(TableDiffer):
         a = table1.make_select()
         b = table2.make_select()
 
-        is_diff_cols = {f"is_diff_{c1}": bool_to_int(a[c1].is_distinct_from(b[c2])) for c1, c2 in safezip(cols1, cols2)}
+        def is_distinct(c1, c2):
+            # With timestamp_precision set, compare timestamps at that precision
+            if db.dialect.timestamp_precision is not None and isinstance(table1._schema[c1], TemporalType):
+                return IsDistinctFrom(NormalizeAsString(a[c1]), NormalizeAsString(b[c2]))
+            return a[c1].is_distinct_from(b[c2])
+
+        is_diff_cols = {f"is_diff_{c1}": bool_to_int(is_distinct(c1, c2)) for c1, c2 in safezip(cols1, cols2)}
 
         a_cols = {f"{c}_a": NormalizeAsString(a[c]) for c in cols1}
         b_cols = {f"{c}_b": NormalizeAsString(b[c]) for c in cols2}

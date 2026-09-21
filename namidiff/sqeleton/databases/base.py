@@ -279,6 +279,9 @@ class BaseDialect(AbstractDialect):
         return math.floor(math.log(2**p, 10))
 
     empty_string_as_null: bool = False
+    # Number of fractional digits timestamps are normalized to. None = column precision, padded to 6 digits.
+    timestamp_precision: Optional[int] = None
+    SUPPORTS_TIMESTAMP_PRECISION = False
 
     @classmethod
     def load_mixins(cls, *abstract_mixins) -> "Self":
@@ -616,6 +619,26 @@ class Database(AbstractDatabase[T]):
 
         _DialectWithEmptyStringAsNull.__name__ = dialect_cls.__name__
         self.dialect = _DialectWithEmptyStringAsNull()
+
+    def set_timestamp_precision(self, precision: int) -> None:
+        """Configure this database instance to normalize timestamps to `precision` fractional digits (1-6).
+
+        Timestamps are truncated to that precision regardless of column precision,
+        e.g. 3 for replicas that only keep milliseconds (like AWS DMS).
+        Creates a per-instance dialect copy so other connections sharing the same
+        dialect class are not affected.
+        """
+        if not 1 <= precision <= 6:
+            raise ValueError(f"timestamp_precision must be between 1 and 6, got {precision}")
+        dialect_cls = type(self.dialect)
+        if not dialect_cls.SUPPORTS_TIMESTAMP_PRECISION:
+            raise NotImplementedError(f"{dialect_cls.name} does not support timestamp_precision")
+
+        class _DialectWithTimestampPrecision(dialect_cls):
+            timestamp_precision = precision
+
+        _DialectWithTimestampPrecision.__name__ = dialect_cls.__name__
+        self.dialect = _DialectWithTimestampPrecision()
 
     def commit(self):
         return self.query(commit)
