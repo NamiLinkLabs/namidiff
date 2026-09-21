@@ -42,7 +42,7 @@ Reladiff is a fork of an archived project called [data-diff](https://github.com/
 
 ## Get Started
 
-[**🗎 Read the Documentation**](docs/index.rst) - the `docs/` folder has everything you need to start diffing. (Upstream reladiff docs are also hosted at [reladiff.readthedocs.io](https://reladiff.readthedocs.io/en/latest/).)
+[**🗎 Read the Documentation**](https://namidiff.namilink.com/) - everything you need to start diffing. (Upstream reladiff docs are also hosted at [reladiff.readthedocs.io](https://reladiff.readthedocs.io/en/latest/).)
 
 ## Quickstart
 

@@ -41,7 +41,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/NamiLinkLabs/namidiff"
 Repository = "https://github.com/NamiLinkLabs/namidiff"
-Documentation = "https://github.com/NamiLinkLabs/namidiff/tree/main/docs"
+Documentation = "https://namidiff.namilink.com/"
 "Bug Tracker" = "https://github.com/NamiLinkLabs/namidiff/issues"
 "Upstream (reladiff)" = "https://github.com/erezsh/reladiff"
 "Upstream (sqeleton)" = "https://github.com/erezsh/sqeleton"
