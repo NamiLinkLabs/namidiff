@@ -11,15 +11,15 @@ from itertools import islice, repeat, chain
 
 from parameterized import parameterized
 
-from sqeleton.utils import number_to_human
-from sqeleton.queries import table, commit, this, Code
-from sqeleton.queries.api import insert_rows_in_batches, Cast
+from namidiff.sqeleton.utils import number_to_human
+from namidiff.sqeleton.queries import table, commit, this, Code
+from namidiff.sqeleton.queries.api import insert_rows_in_batches, Cast
 
-from reladiff import databases as db
-from reladiff.query_utils import drop_table
-from reladiff.utils import accumulate
-from reladiff.hashdiff_tables import HashDiffer, DEFAULT_BISECTION_THRESHOLD
-from reladiff.table_segment import TableSegment
+from namidiff import databases as db
+from namidiff.query_utils import drop_table
+from namidiff.utils import accumulate
+from namidiff.hashdiff_tables import HashDiffer, DEFAULT_BISECTION_THRESHOLD
+from namidiff.table_segment import TableSegment
 from .common import (
     CONN_STRINGS,
     N_SAMPLES,

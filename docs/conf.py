@@ -59,9 +59,9 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 
 # General information about the project.
-project = "reladiff"
-copyright = "Erez Shinan"
-author = "Erez Shinan"
+project = "namidiff"
+copyright = "NamiLink Kft.; reladiff copyright Erez Shinan; data-diff copyright DataFold Inc."
+author = "NamiLink Kft."
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -129,7 +129,7 @@ html_sidebars = {
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "reladiffdoc"
+htmlhelp_basename = "namidiffdoc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -153,7 +153,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "Reladiff.tex", "Reladiff Documentation", "Erez Shinan", "manual"),
+    (master_doc, "Namidiff.tex", "Namidiff Documentation", "Erez Shinan", "manual"),
 ]
 
 
@@ -161,7 +161,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "Reladiff", "Reladiff Documentation", [author], 1)]
+man_pages = [(master_doc, "Namidiff", "Namidiff Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -172,10 +172,10 @@ man_pages = [(master_doc, "Reladiff", "Reladiff Documentation", [author], 1)]
 texinfo_documents = [
     (
         master_doc,
-        "Reladiff",
-        "Reladiff Documentation",
+        "Namidiff",
+        "Namidiff Documentation",
         author,
-        "Reladiff",
+        "Namidiff",
         "One line description of project.",
         "Miscellaneous",
     ),

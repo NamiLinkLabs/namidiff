@@ -10,13 +10,13 @@ on:
     paths:
       - '**.py'
       - 'pyproject.toml'
-      - 'poetry.lock'
+      - 'uv.lock'
       - '.github/workflows/**'
       - 'docker-compose.yml'
       - '!dev/**'
       - '!docs/**'
 
-    branches: [ master ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
@@ -45,11 +45,11 @@ jobs:
       - name: Build the stack
         run: docker compose up -d mysql postgres trino vertica # presto clickhouse
 
-      - name: Install Poetry
-        run: pip install poetry
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
 
       - name: Install package
-        run: "poetry install"
+        run: uv sync --locked
 
       # BigQuery start
     #   - id: 'auth'
@@ -61,7 +61,7 @@ jobs:
     #     uses: 'google-github-actions/setup-gcloud@v1'
 
     #   - name: "Install BigQuery for Python"
-    #     run: poetry add google-cloud-bigquery
+    #     run: uv add google-cloud-bigquery
 
       # BigQuery end
 
@@ -76,4 +76,4 @@ jobs:
             REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
         run: |
           chmod +x tests/waiting_for_stack_up.sh
-          ./tests/waiting_for_stack_up.sh && poetry run unittest-parallel -j 16
+          ./tests/waiting_for_stack_up.sh && uv run unittest-parallel -j 16

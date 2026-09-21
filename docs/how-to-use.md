@@ -1,21 +1,21 @@
 # User guide
 
-Once you've [installed](https://reladiff.readthedocs.io/en/latest/install.html) Reladiff, you can run it from the command-line, or from Python.
+Once you've [installed](https://reladiff.readthedocs.io/en/latest/install.html) Namidiff, you can run it from the command-line, or from Python.
 
 ## How to use from the shell / command-line
 
-The basic syntax for reladiff is:
+The basic syntax for namidiff is:
 
 ```bash
 # Cross-DB diff, using hashes
-reladiff  DB1_URI  TABLE1_NAME  DB2_URI  TABLE2_NAME  [OPTIONS]
+namidiff  DB1_URI  TABLE1_NAME  DB2_URI  TABLE2_NAME  [OPTIONS]
 ```
 
 When both tables belong to the same database, a shorter syntax is available:
 
 ```bash
 # Same-DB diff, using outer join
-reladiff  DB_URI  TABLE1_NAME  TABLE2_NAME  [OPTIONS]
+namidiff  DB_URI  TABLE1_NAME  TABLE2_NAME  [OPTIONS]
 ```
 
 `DB_URL` is either a [database URL](supported-databases.md), or the name of a database definition that is specified in a [configuration file](https://reladiff.readthedocs.io/en/latest/how-to-use.html#how-to-use-with-a-configuration-file). Our database URLs conform to the same format as SQLAlchemy.
@@ -50,7 +50,7 @@ it's recommended to surround them with quotes.
   - `-j` or `--threads` - Number of worker threads to use per database. Default=1.
   - `-w`, `--where` - An additional 'where' expression to restrict the search space.
   - `--allow-empty-tables` - Allows diffing on empty tables. Otherwise, we raise an error.
-  - `--case-sensitive` - Column names are treated as case-sensitive. Otherwise, reladiff corrects their case according to schema.
+  - `--case-sensitive` - Column names are treated as case-sensitive. Otherwise, namidiff corrects their case according to schema.
   - `--conf`, `--run` - Specify the run and configuration from a TOML file. (see below)
   - `--bisection-threshold` - Minimal size of segment to be split. Smaller segments will be downloaded and compared locally.
   - `--bisection-factor` - Segments per iteration. When set to 2, it performs binary search.
@@ -68,7 +68,7 @@ it's recommended to surround them with quotes.
 
 ### How to use with a configuration file
 
-Reladiff lets you load the configuration for a run from a TOML file.
+Namidiff lets you load the configuration for a run from a TOML file.
 
 **Reasons to use a configuration file:**
 
@@ -78,7 +78,7 @@ Reladiff lets you load the configuration for a run from a TOML file.
 
 - Gives you fine-grained control over the settings switches, without requiring any Python code.
 
-Use `--conf` to specify that path to the configuration file. reladiff will load the settings from `run.default`, if it's defined.
+Use `--conf` to specify that path to the configuration file. namidiff will load the settings from `run.default`, if it's defined.
 
 Then you can, optionally, use `--run` to choose to load the settings of a specific run, and override the settings `run.default`. (all runs extend `run.default`, like inheritance).
 
@@ -109,16 +109,16 @@ verbose = false
 2.table = "rating_del1"
 ```
 
-In this example, running `reladiff --conf myconfig.toml --run test_diff` will compare between `rating` and `rating_del1`.
+In this example, running `namidiff --conf myconfig.toml --run test_diff` will compare between `rating` and `rating_del1`.
 It will use the `timestamp` column as the update column, as specified in `run.default`. However, it won't be verbose, since that
 flag is overwritten to `false`.
 
-Running it with `reladiff --conf myconfig.toml --run test_diff -v` will set verbose back to `true`.
+Running it with `namidiff --conf myconfig.toml --run test_diff -v` will set verbose back to `true`.
 
 
 ## How to use from Python
 
-Import the `reladiff` module, and use the following functions:
+Import the `namidiff` module, and use the following functions:
 
 - `connect_to_table()` to connect to a specific table in the database
 
@@ -132,7 +132,7 @@ Example:
 import logging
 logging.basicConfig(level=logging.INFO)
 
-from reladiff import connect_to_table, diff_tables
+from namidiff import connect_to_table, diff_tables
 
 table1 = connect_to_table("postgresql:///", "table_name", "id")
 table2 = connect_to_table("mysql:///", "table_name", "id")
@@ -148,14 +148,14 @@ To learn more about the different options, [read the API reference](https://rela
 
 ## Tips
 
-- If you are only interested in whether something changed, i.e. a yes/no answer, set `--limit 1`. Reladiff will return as soon as it finds the first difference.
+- If you are only interested in whether something changed, i.e. a yes/no answer, set `--limit 1`. Namidiff will return as soon as it finds the first difference.
 
 - Ensure that you have indexes on the columns you are comparing. Preferably a compound index, if relevant. You can run with `--interactive` to see an EXPLAIN for the queries.
 
 - Setting a higher thread count may help performance significantly, depending on the database. For databases that limit concurrency per query, such as PostgreSQL/MySQL, this can improve performance dramatically.
 
-- A low `--bisection-threshold` will minimize the amount of network transfer. But if network isn't an issue, a high `--bisection-threshold` will make Reladiff run a lot faster.
+- A low `--bisection-threshold` will minimize the amount of network transfer. But if network isn't an issue, a high `--bisection-threshold` will make Namidiff run a lot faster.
 
 - If you run into timeouts for very large tables, try increasing the `--bisection-factor`.
 
-- The fewer columns you verify, the faster Reladiff will be. If you're only interested in additions/deletions, verifying the primary key could be enough. If you have an automatic `updated` column, it might be enough to capture changes, i.e. comparing all the data isn't always necessary.
+- The fewer columns you verify, the faster Namidiff will be. If you're only interested in additions/deletions, verifying the primary key could be enough. If you have an automatic `updated` column, it might be enough to capture changes, i.e. comparing all the data isn't always necessary.

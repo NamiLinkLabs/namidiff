@@ -1,9 +1,9 @@
 import unittest
 
-from sqeleton.queries import table, commit
+from namidiff.sqeleton.queries import table, commit
 
-from reladiff import TableSegment, HashDiffer
-from reladiff import databases as db
+from namidiff import TableSegment, HashDiffer
+from namidiff import databases as db
 from .common import get_conn, random_table_suffix
 
 

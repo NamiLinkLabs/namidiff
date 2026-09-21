@@ -1,11 +1,11 @@
 from typing import List
 from datetime import datetime
 
-from sqeleton.queries.ast_classes import TablePath
-from sqeleton.queries import table, commit
-from reladiff.table_segment import TableSegment
-from reladiff import databases as db
-from reladiff.joindiff_tables import JoinDiffer
+from namidiff.sqeleton.queries.ast_classes import TablePath
+from namidiff.sqeleton.queries import table, commit
+from namidiff.table_segment import TableSegment
+from namidiff import databases as db
+from namidiff.joindiff_tables import JoinDiffer
 
 from .test_diff_tables import DiffTestCase
 

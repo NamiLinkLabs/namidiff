@@ -23,6 +23,6 @@
 
 
 #### Looking for a database not on the list?
-If a database is not on the list, we'd still love to support it. [Please open an issue](https://github.com/erezsh/reladiff/issues) to discuss it, or vote on existing requests to push them up our todo list.
+If a database is not on the list, we'd still love to support it. [Please open an issue](https://github.com/NamiLinkLabs/namidiff/issues) to discuss it, or vote on existing requests to push them up our todo list.
 
 We also accept pull-requests!

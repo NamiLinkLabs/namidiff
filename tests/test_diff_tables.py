@@ -3,13 +3,13 @@ from typing import Callable
 import uuid
 import unittest
 
-from sqeleton.queries import table, this, commit
-from sqeleton.utils import ArithAlphanumeric, numberToAlphanum
+from namidiff.sqeleton.queries import table, this, commit
+from namidiff.sqeleton.utils import ArithAlphanumeric, numberToAlphanum
 
-from reladiff.hashdiff_tables import HashDiffer, compare_element, diff_sets
-from reladiff.joindiff_tables import JoinDiffer
-from reladiff.table_segment import TableSegment, split_space, Vector
-from reladiff import databases as db
+from namidiff.hashdiff_tables import HashDiffer, compare_element, diff_sets
+from namidiff.joindiff_tables import JoinDiffer
+from namidiff.table_segment import TableSegment, split_space, Vector
+from namidiff import databases as db
 
 from .common import str_to_checksum, test_each_database_in_list, DiffTestCase, table_segment
 

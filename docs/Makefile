@@ -4,7 +4,7 @@
 # You can set these variables from the command line.
 SPHINXOPTS    =
 SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = reladiff
+SPHINXPROJ    = namidiff
 SOURCEDIR     = .
 BUILDDIR      = _build
 

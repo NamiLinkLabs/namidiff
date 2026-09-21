@@ -1,0 +1,55 @@
+name: Package build check
+
+# Verifies that the distribution builds cleanly and installs, independent of the
+# unit-test suite. Runs on every push / PR so packaging breakage is caught early.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'namidiff/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'README.md'
+      - '.github/workflows/package.yml'
+  pull_request:
+    paths:
+      - 'namidiff/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'README.md'
+      - '.github/workflows/package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build sdist + wheel and smoke-test install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Validate metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Smoke-test wheel install
+        run: |
+          uv venv -q /tmp/smoke
+          uv pip install -q --python /tmp/smoke dist/*.whl
+          /tmp/smoke/bin/namidiff --version
+          /tmp/smoke/bin/python -c "import namidiff, namidiff.sqeleton; print('namidiff', namidiff.__version__)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error

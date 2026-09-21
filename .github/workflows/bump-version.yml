@@ -1,0 +1,93 @@
+name: Bump version and release
+
+# Manual trigger (Actions tab -> "Bump version and release" -> Run workflow).
+# Bumps the version in pyproject.toml, commits, tags `vX.Y.Z`, pushes both,
+# then runs the Release workflow for that tag.
+#
+# The Release workflow is invoked via workflow_call here because tags pushed
+# with GITHUB_TOKEN do not trigger `on: push` workflows.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump"
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - explicit
+      version:
+        description: "Explicit version (only used when bump = explicit), e.g. 0.7.0"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump, commit, tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # Deploy key with write access, listed as a bypass actor on the
+          # main ruleset. GITHUB_TOKEN cannot push past "require pull request".
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Bump version
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXPLICIT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${BUMP}" = "explicit" ]; then
+            [ -n "${EXPLICIT_VERSION}" ] || { echo "::error::version input required when bump=explicit"; exit 1; }
+            uv version --no-sync "${EXPLICIT_VERSION}"
+          else
+            uv version --no-sync --bump "${BUMP}"
+          fi
+          new="$(uv version --short)"
+          echo "new version: ${new}"
+          if git rev-parse -q --verify "refs/tags/v${new}" >/dev/null; then
+            echo "::error::Tag v${new} already exists"; exit 1
+          fi
+          echo "tag=v${new}" >> "$GITHUB_OUTPUT"
+          echo "version=${new}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and tag
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock
+          git commit -m "Release ${{ steps.bump.outputs.tag }}"
+          git tag -a "${{ steps.bump.outputs.tag }}" -m "namidiff ${{ steps.bump.outputs.version }}"
+          git push origin main
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+  release:
+    name: Release
+    needs: bump
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.bump.outputs.tag }}
+    permissions:
+      contents: write
+      id-token: write

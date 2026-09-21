@@ -6,4 +6,4 @@ sphinx-rtd-theme
 recommonmark
 enum-tools[sphinx]
 
-reladiff
+namidiff

@@ -3,15 +3,15 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 
-from sqeleton.queries import commit, current_timestamp
+from namidiff.sqeleton.queries import commit, current_timestamp
 
 from .common import DiffTestCase, CONN_STRINGS
 from .test_diff_tables import test_each_database
 
 
-def run_reladiff_cli(*args):
+def run_namidiff_cli(*args):
     try:
-        stdout = subprocess.check_output([sys.executable, "-m", "reladiff"] + list(args), stderr=subprocess.PIPE)
+        stdout = subprocess.check_output([sys.executable, "-m", "namidiff"] + list(args), stderr=subprocess.PIPE)
     except subprocess.CalledProcessError as e:
         logging.error(e.stderr)
         raise
@@ -45,12 +45,12 @@ class TestCLI(DiffTestCase):
 
     def test_basic(self):
         conn_str = CONN_STRINGS[self.db_cls]
-        diff = run_reladiff_cli(conn_str, self.table_src_name, conn_str, self.table_dst_name)
+        diff = run_namidiff_cli(conn_str, self.table_src_name, conn_str, self.table_dst_name)
         assert len(diff) == 1
 
     def test_options(self):
         conn_str = CONN_STRINGS[self.db_cls]
-        diff = run_reladiff_cli(
+        diff = run_namidiff_cli(
             conn_str,
             self.table_src_name,
             conn_str,
@@ -97,5 +97,5 @@ class TestCLI_CaseSensitive(DiffTestCase):
 
     def test_cli_case_sensitive(self):
         conn_str = CONN_STRINGS[self.db_cls]
-        diff = run_reladiff_cli(conn_str, self.table_src_name, conn_str, self.table_dst_name)
+        diff = run_namidiff_cli(conn_str, self.table_src_name, conn_str, self.table_dst_name)
         assert len(diff) == 1

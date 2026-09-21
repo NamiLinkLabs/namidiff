@@ -5,12 +5,12 @@ at the dialect level.
 """
 import unittest
 
-from sqeleton.abcs.database_types import Text, StringType
-from sqeleton.abcs.mixins import AbstractMixin_NormalizeValue
-from reladiff.databases.postgresql import PostgresqlDialect
-from reladiff.databases.mysql import Dialect as MySQLDialect
-from reladiff.databases.snowflake import Dialect as SnowflakeDialect
-from reladiff.databases.oracle import Dialect as OracleDialect
+from namidiff.sqeleton.abcs.database_types import Text, StringType
+from namidiff.sqeleton.abcs.mixins import AbstractMixin_NormalizeValue
+from namidiff.databases.postgresql import PostgresqlDialect
+from namidiff.databases.mysql import Dialect as MySQLDialect
+from namidiff.databases.snowflake import Dialect as SnowflakeDialect
+from namidiff.databases.oracle import Dialect as OracleDialect
 
 
 def _normalize(dialect, sql):

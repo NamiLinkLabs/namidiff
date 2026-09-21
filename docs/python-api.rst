@@ -1,7 +1,7 @@
 Python API Reference
 ====================
 
-.. py:module:: reladiff
+.. py:module:: namidiff
 
 .. autofunction:: connect
 
@@ -21,10 +21,10 @@ Python API Reference
 .. autoclass:: DiffResultWrapper
     :members: __iter__, close, get_stats_dict, get_stats_string
 
-.. autoclass:: reladiff.databases.database_types.AbstractDatabase
+.. autoclass:: namidiff.databases.database_types.AbstractDatabase
     :members:
 
-.. autoclass:: reladiff.databases.database_types.AbstractDialect
+.. autoclass:: namidiff.databases.database_types.AbstractDialect
     :members:
 
 .. autodata:: DbKey

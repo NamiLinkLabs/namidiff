@@ -1,121 +1,130 @@
-[tool.poetry]
-name = "reladiff"
+[project]
+name = "namidiff"
 version = "0.6.8"
-description = "Command-line tool and Python library to efficiently diff rows across two different databases."
-authors = ["Erez Shinan <erezshin@gmail.com>"]
-license = "MIT"
+description = "Efficiently diff rows across two different databases. Fork of reladiff (itself a fork of data-diff). Python package and CLI are both `namidiff`."
 readme = "README.md"
-repository = "https://github.com/erezsh/reladiff"
-documentation = "https://reladiff.readthedocs.io/en/latest/"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+authors = [
+    { name = "NamiLink Kft.", email = "mate@namilink.com" },
+    { name = "Erez Shinan", email = "erezshin@gmail.com" },
+]
+maintainers = [
+    { name = "NamiLink Kft.", email = "mate@namilink.com" },
+]
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: Information Technology",
     "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Topic :: Database :: Database Engines/Servers",
-    "Typing :: Typed"
+    "Typing :: Typed",
 ]
-packages = [
-    { include = "reladiff" },
-    { include = "sqeleton" }
-    ]
+dependencies = [
+    "runtype>=0.5.0",
+    "dsnparse",
+    "click>=8.1",
+    "rich",
+    "toml>=0.10.2",
+]
 
-[tool.poetry.dependencies]
-python = "^3.8"
-runtype = ">=0.5.0"
-dsnparse = "*"
-click = ">=8.1"
-rich = "*"
-toml = ">=0.10.2"
-mysql-connector-python = {version=">=8.0.29", optional=true}
-psycopg2-binary = {version="*", optional=true}
-snowflake-connector-python = {version=">=2.7.2", optional=true}
-cryptography = {version="*", optional=true}
-trino = {version=">=0.314.0", optional=true}
-presto-python-client = {version="*", optional=true}
-clickhouse-driver = {version="*", optional=true}
-duckdb = {version=">=0.7.0", optional=true}
-textual = {version=">=0.9.1", optional=true}
-textual-select = {version="*", optional=true}
-pygments = {version=">=2.13.0", optional=true}
-prompt-toolkit = {version=">=3.0.36", optional=true}
-pyarrow = [
-    {version=">=18.0.0", markers="python_version >= '3.9'", optional=true},
-    {version="<18.0.0", markers="python_version < '3.9'", optional=true},
-]
-pandas = [
-    {version=">=2.1", markers="python_version >= '3.9'", optional=true},
-    {version="*", markers="python_version < '3.9'", optional=true},
-]
-numpy = [
-    {version=">=1.26.4", markers="python_version >= '3.9'", optional=true},
-    {version=">=1.24.4", markers="python_version < '3.9'", optional=true},
-]
-# sqlalchemy-dremio 3.0.4 is missing a type conversion for datetime[ms] and is not compatible with Python 3.8. Created a
-# fork with a fix and opening a PR.
-sqlalchemy-dremio = {git = "https://github.com/scottkwalker/sqlalchemy_dremio", rev="308e686b166787941180850ce5813c313d3a9985", optional=true}
+[project.urls]
+Homepage = "https://github.com/NamiLinkLabs/namidiff"
+Repository = "https://github.com/NamiLinkLabs/namidiff"
+Documentation = "https://github.com/NamiLinkLabs/namidiff/tree/main/docs"
+"Bug Tracker" = "https://github.com/NamiLinkLabs/namidiff/issues"
+"Upstream (reladiff)" = "https://github.com/erezsh/reladiff"
+"Upstream (sqeleton)" = "https://github.com/erezsh/sqeleton"
 
-[tool.poetry.dev-dependencies]
-parameterized = "*"
-unittest-parallel = "*"
-# preql = ">=0.2.19"
-mysql-connector-python = "*"
-psycopg2-binary = "*"
-snowflake-connector-python = ">=2.7.2"
-cryptography = "*"
-trino = ">=0.314.0"
-presto-python-client = "*"
-clickhouse-driver = "*"
-vertica-python = "*"
-duckdb = "<1.2"
-# google-cloud-bigquery = "*"
-# databricks-sql-connector = "*"
-pyarrow = [
-    {version=">=18.0.0", markers="python_version >= '3.9'"},
-    {version="<18.0.0", markers="python_version < '3.9'"},
-]
-pandas = [
-    {version=">=2.1", markers="python_version >= '3.9'"},
-    {version="*", markers="python_version < '3.9'"},
-]
-numpy = [
-    {version=">=1.26.4", markers="python_version >= '3.9'"},
-    {version=">=1.24.4", markers="python_version < '3.9'"},
-]
-# sqlalchemy-dremio 3.0.4 is missing a type conversion for datetime[ms] and is not compatible with Python 3.8. Created a
-# fork with a fix and opening a PR.
-sqlalchemy-dremio = {git = "https://github.com/scottkwalker/sqlalchemy_dremio", rev="308e686b166787941180850ce5813c313d3a9985"}
+[project.scripts]
+namidiff = "namidiff.__main__:main"
 
-[tool.poetry.extras]
-# When adding, update also: README + dev deps just above
-preql = ["preql"]
-mysql = ["mysql-connector-python"]
+[project.optional-dependencies]
+# When adding, update also: README + the dev dependency group below
+mysql = ["mysql-connector-python>=8.0.29"]
 postgresql = ["psycopg2-binary"]
-snowflake = ["snowflake-connector-python", "cryptography"]
+snowflake = ["snowflake-connector-python>=2.7.2", "cryptography"]
 presto = ["presto-python-client"]
 oracle = ["cx_Oracle"]
 # databricks = ["databricks-sql-connector"]
-trino = ["trino"]
+trino = ["trino>=0.314.0"]
 clickhouse = ["clickhouse-driver"]
 vertica = ["vertica-python"]
-duckdb = ["duckdb"]
-tui = ["textual", "textual-select", "pygments", "prompt-toolkit"]
-dremio = ["sqlalchemy-dremio", "pandas", "pyarrow"]
+duckdb = ["duckdb>=0.7.0"]
+tui = ["textual>=0.9.1", "textual-select", "pygments>=2.13.0", "prompt-toolkit>=3.0.36"]
+dremio = [
+    # Published metadata points at PyPI's sqlalchemy-dremio. For local/dev installs,
+    # [tool.uv.sources] below swaps in a fork that fixes datetime[ms] + Python 3.8.
+    "sqlalchemy-dremio",
+    "pandas>=2.1; python_version >= '3.9'",
+    "pandas; python_version < '3.9'",
+    "pyarrow>=18.0.0; python_version >= '3.9'",
+    "pyarrow<18.0.0; python_version < '3.9'",
+    "numpy>=1.26.4; python_version >= '3.9'",
+    "numpy>=1.24.4; python_version < '3.9'",
+]
+all = [
+    "mysql-connector-python>=8.0.29",
+    "psycopg2-binary",
+    "snowflake-connector-python>=2.7.2",
+    "cryptography",
+    "presto-python-client",
+    "cx_Oracle",
+    "trino>=0.314.0",
+    "clickhouse-driver",
+    "vertica-python",
+    "duckdb>=0.7.0",
+]
 
-all = ["mysql-connector-python", "psycopg2-binary", "snowflake-connector-python", "cryptography", "presto-python-client", "cx_Oracle", "trino", "clickhouse-driver", "vertica-python", "duckdb"]
+[dependency-groups]
+dev = [
+    "parameterized",
+    "unittest-parallel",
+    # "preql>=0.2.19",
+    "mysql-connector-python",
+    "psycopg2-binary",
+    "snowflake-connector-python>=2.7.2",
+    "cryptography",
+    "trino>=0.314.0",
+    "presto-python-client",
+    "clickhouse-driver",
+    "vertica-python",
+    "duckdb<1.2",
+    # "google-cloud-bigquery",
+    # "databricks-sql-connector",
+    "pandas>=2.1; python_version >= '3.9'",
+    "pandas; python_version < '3.9'",
+    "pyarrow>=18.0.0; python_version >= '3.9'",
+    "pyarrow<18.0.0; python_version < '3.9'",
+    "numpy>=1.26.4; python_version >= '3.9'",
+    "numpy>=1.24.4; python_version < '3.9'",
+    "sqlalchemy-dremio",
+]
+
+[tool.uv.sources]
+# sqlalchemy-dremio 3.0.4 is missing a type conversion for datetime[ms] and is not compatible with Python 3.8.
+# Fork with a fix (PR pending upstream). Only applies to uv-managed installs, not to the published wheel.
+sqlalchemy-dremio = { git = "https://github.com/scottkwalker/sqlalchemy_dremio", rev = "308e686b166787941180850ce5813c313d3a9985" }
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
-reladiff = 'reladiff.__main__:main'
+[tool.hatch.build.targets.wheel]
+packages = ["namidiff"]
+
+[tool.hatch.build.targets.sdist]
+include = ["namidiff/", "README.md", "LICENSE", "pyproject.toml"]
 
 [tool.mypy]
 no_implicit_optional=false

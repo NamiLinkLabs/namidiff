@@ -1,0 +1,165 @@
+services:
+    postgres:
+      container_name: dd-postgresql
+      image: postgres:14.1-alpine
+      # work_mem: less tmp files
+      # maintenance_work_mem: improve table-level op perf
+      # max_wal_size: allow more time before merging to heap
+      command: >
+        -c work_mem=1GB
+        -c maintenance_work_mem=1GB
+        -c max_wal_size=8GB
+      restart: unless-stopped
+      volumes:
+        - postgresql-data:/var/lib/postgresql/data:delegated
+      ports:
+        - '5432:5432'
+      expose:
+        - '5432'
+      env_file:
+        - sqeleton-project/dev/dev.env
+      tty: true
+      networks:
+        - local
+
+    mysql:
+      container_name: dd-mysql
+      image: mysql:oracle
+      # fsync less aggressively for insertion perf for test setup
+      command: >
+        --binlog-cache-size=16M
+        --key_buffer_size=0
+        --max_connections=1000
+        --innodb_flush_log_at_trx_commit=2
+        --innodb_flush_log_at_timeout=10
+        --innodb_log_compressed_pages=OFF
+        --sync_binlog=0
+      restart: unless-stopped
+      volumes:
+        - mysql-data:/var/lib/mysql:delegated
+      user: mysql
+      ports:
+        - '3306:3306'
+      expose:
+        - '3306'
+      env_file:
+        - sqeleton-project/dev/dev.env
+      tty: true
+      networks:
+        - local
+
+    oracle:
+      container_name: dd-oracle
+      image: gvenzl/oracle-free:slim-faststart
+      hostname: oracle-db
+      ports:
+        - "1521:1521"
+      env_file:
+        - sqeleton-project/dev/dev.env
+      volumes:
+        - oracle-volume:/opt/oracle/oradata
+      networks:
+        - local
+      restart: unless-stopped
+
+
+    clickhouse:
+      container_name: dd-clickhouse
+      image: clickhouse/clickhouse-server:latest
+      restart: unless-stopped
+      volumes:
+          - clickhouse-data:/var/lib/clickhouse:delegated
+      ulimits:
+        nproc: 65535
+        nofile:
+          soft: 262144
+          hard: 262144
+      ports:
+        - '8123:8123'
+        - '9000:9000'
+      expose:
+        - '8123'
+        - '9000'
+      env_file:
+        - sqeleton-project/dev/dev.env
+      tty: true
+      networks:
+      - local
+
+    # prestodb.dbapi.connect(host="127.0.0.1", user="presto").cursor().execute('SELECT * FROM system.runtime.nodes')
+    presto:
+        container_name: dd-presto
+        build:
+            context: sqeleton-project/dev
+            dockerfile: sqeleton-project/dev/Dockerfile.prestosql.340
+        volumes:
+            - ./dev/presto-conf/standalone:/opt/presto/etc:ro
+        ports:
+            - '8080:8080'
+        tty: true
+        networks:
+            - local
+
+    trino:
+        container_name: dd-trino
+        image: 'trinodb/trino:450'
+        hostname: trino
+        ports:
+            - '8081:8080'
+            - '8443:8443'
+        volumes:
+            - ./dev/trino-conf/etc:/etc/trino:ro
+        networks:
+            - local
+
+# The vertica docker image is 404
+#    vertica:
+#      container_name: dd-vertica
+#      image: vertica/vertica-ce:12.0.0-0
+#      restart: unless-stopped
+#      volumes:
+#          - vertica-data:/data:delegated
+#      ports:
+#        - '5433:5433'
+#        - '5444:5444'
+#      expose:
+#        - '5433'
+#        - '5444'
+#      env_file:
+#        - dev/dev.env
+#      tty: true
+#      networks:
+#      - local
+
+    dremio:
+        container_name: dd-dremio
+        image: dremio/dremio-oss:latest
+        restart: unless-stopped
+        ports:
+          - '9047:9047'
+          - '31010:31010'
+          - '32010:32010'
+        expose:
+          - '9047'
+          - '31010'
+          - '32010'
+        networks:
+            - local
+        tty: true
+        env_file:
+          - sqeleton-project/dev/dev.env
+        volumes:
+          - dremio-data:/var/lib/dremio:delegated
+
+volumes:
+  postgresql-data:
+  mysql-data:
+  clickhouse-data:
+  # The vertica docker image is 404
+  #vertica-data:
+  dremio-data:
+  oracle-volume:
+
+networks:
+  local:
+    driver: bridge

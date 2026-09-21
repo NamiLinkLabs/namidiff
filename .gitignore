@@ -145,3 +145,6 @@ benchmark_*.png
 # VSCode
 .vscode
 .cecli*
+
+# Local scratch copy of upstream sqeleton, not part of namidiff
+sqeleton-project/

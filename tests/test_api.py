@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 
-from reladiff import diff_tables, connect_to_table, Algorithm
-from reladiff.databases import MySQL
-from sqeleton.queries import commit
+from namidiff import diff_tables, connect_to_table, Algorithm
+from namidiff.databases import MySQL
+from namidiff.sqeleton.queries import commit
 
 from .common import TEST_MYSQL_CONN_STRING, DiffTestCase
 

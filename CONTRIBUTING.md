@@ -1,10 +1,12 @@
-# Contributing to Reladiff
+# Contributing to Namidiff
+
+Namidiff is the NamiLink Kft. fork of Reladiff.
 
 Contributions are very welcome! We'll be happy to help you in the process.
 
 ## What should I know before I get started?
 
-Go through the README and the documentation, and make sure that you understand how Reladiff works.
+Go through the README and the documentation, and make sure that you understand how Namidiff works.
 
 ## How to contribute?
 
@@ -12,29 +14,29 @@ Go through the README and the documentation, and make sure that you understand h
 
 Please report the bug with as many details as you can.
 
-1. Include the exact command that you used. Make sure to run Reladiff with the `-d` flag for debug output.
+1. Include the exact command that you used. Make sure to run Namidiff with the `-d` flag for debug output.
 2. Provide the entire output of the command. (stdout, logs, exception)
 3. If possible, show us how we could reproduce the bug. i.e. how to set up an environment in which it occurs.
 
 (When pasting, always make sure to redact sensitive information, like passwords.)
 
-If Reladiff returns incorrect results, i.e. false-positive or false-negative, please also include the original values.
+If Namidiff returns incorrect results, i.e. false-positive or false-negative, please also include the original values.
 
 Before you report a bug, make sure it doesn't already exist.
 
-See [issues](/erezsh/reladiff/issues/).
+See [issues](https://github.com/NamiLinkLabs/namidiff/issues/).
 
 ### Suggesting Enhancements
 
-We are always interested to hear about how we can make Reladiff better!
+We are always interested to hear about how we can make Namidiff better!
 
 If you'd like us to support a new database, you should open an issue for it, if there isn't one already. If it already exists, make sure to vote for it with a :thumbsup:, to help us priortize it.
 
 The same goes for other technical requests, like missing features, or gaps in the documentation.
 
-See [issues](/erezsh/reladiff/issues/).
+See [issues](https://github.com/NamiLinkLabs/namidiff/issues/).
 
-For questions, and non-technical discussions, see [discussions](https://github.com/erezsh/reladiff/discussions).
+For questions, and non-technical discussions, see [discussions](https://github.com/NamiLinkLabs/namidiff/discussions).
 
 ### Contributing code
 
@@ -46,13 +48,13 @@ When in doubt, use the existing code as a guideline, or ask.
 
 #### Get started (setup)
 
-To get started, first clone the repository. For example `git clone https://github.com/erezsh/reladiff`.
+To get started, first clone the repository. For example `git clone https://github.com/NamiLinkLabs/namidiff`.
 
 Once inside, you can install the dependencies.
 
-- Option 1: Run `poetry install` to install them in a virtual env. You can then run Reladiff using `poetry run reladiff ...` .
+- Option 1: Run `poetry install` to install them in a virtual env. You can then run Namidiff using `poetry run namidiff ...` .
 
-- Option 2: Run `pip install -e .` to install them, and Reladiff, in the global context.
+- Option 2: Run `pip install -e .` to install them, and Namidiff, in the global context.
 
 At the bare minimum, you need MySQL to run the tests.
 
@@ -74,11 +76,11 @@ When debugging, we recommend using the `-f` flag, to stop on error. Also, use th
 
 #### Implementing a new database.
 
-New databases should be added as a new module in the `reladiff/databases/` folder.
+New databases should be added as a new module in the `namidiff/databases/` folder.
 
 If possible, please also add the database setup to `docker-compose.yml`, so that we can run and test it for ourselves. If you do, also update the CI (`ci.yml`).
 
-Guide to implementing a new database driver: https://reladiff.readthedocs.io/en/latest/new-database-driver-guide.html
+Guide to implementing a new database driver: [docs/new-database-driver-guide.rst](docs/new-database-driver-guide.rst)
 
 ## Development Setup
 
@@ -135,7 +137,7 @@ $ curl https://datafold-public.s3.us-west-2.amazonaws.com/1m.csv -o dev/ratings.
 Now you can insert it into the testing database(s):
 
 ```shell-session
-# It's optional to seed more than one to run reladiff(1) against.
+# It's optional to seed more than one to run namidiff(1) against.
 $ poetry run preql -f dev/prepare_db.pql mysql://mysql:Password1@127.0.0.1:3306/mysql
 $ poetry run preql -f dev/prepare_db.pql postgresql://postgres:Password1@127.0.0.1:5432/postgres
 # Cloud databases
@@ -144,10 +146,10 @@ $ poetry run preql -f dev/prepare_db.pql mssql://<uri>
 $ poetry run preql -f dev/prepare_db.pql bigquery:///<project>
 ```
 
-**5. Run **Reladiff** against seeded database (optional)**
+**5. Run **Namidiff** against seeded database (optional)**
 
 ```bash
-poetry run python3 -m reladiff postgresql://postgres:Password1@localhost/postgres rating postgresql://postgres:Password1@localhost/postgres rating_del1 --verbose
+poetry run python3 -m namidiff postgresql://postgres:Password1@localhost/postgres rating postgresql://postgres:Password1@localhost/postgres rating_del1 --verbose
 ```
 
 **6. Run benchmarks (optional)**

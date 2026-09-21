@@ -1,0 +1,128 @@
+name: Release
+
+# Publishes `namidiff` to PyPI and creates a GitHub Release.
+#
+# Triggered by pushing a tag of the form `vX.Y.Z` (must equal the version in
+# pyproject.toml), or via `workflow_call` from bump-version.yml.
+#
+# PyPI auth uses Trusted Publishing (OIDC) - no API token secret is needed.
+# See RELEASING.md for the one-time PyPI setup.
+
+on:
+  push:
+    tags:
+      - 'v*'   # e.g. v0.7.0 or v0.7.0rc1; the build job enforces tag == pyproject version
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.7.0)"
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches pyproject version
+        id: meta
+        run: |
+          set -euo pipefail
+          tag="${RELEASE_TAG}"
+          tag_version="${tag#v}"
+          pyproject_version="$(uv run --no-project python -c 'import tomllib,sys; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"
+          echo "tag=${tag}  pyproject=${pyproject_version}"
+          if [ "${tag_version}" != "${pyproject_version}" ]; then
+            echo "::error::Tag ${tag} does not match pyproject.toml version ${pyproject_version}"
+            exit 1
+          fi
+          echo "version=${pyproject_version}" >> "$GITHUB_OUTPUT"
+          if [[ "${pyproject_version}" =~ [a-zA-Z] ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build distributions
+        run: uv build
+
+      - name: Validate metadata
+        run: uvx twine check --strict dist/*
+
+      - name: Smoke-test wheel install
+        run: |
+          uv venv -q /tmp/smoke
+          uv pip install -q --python /tmp/smoke dist/*.whl
+          installed="$(/tmp/smoke/bin/namidiff --version)"
+          echo "namidiff --version -> ${installed}"
+          [ "${installed}" = "v${{ steps.meta.outputs.version }}" ]
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/namidiff/${{ needs.build.outputs.version }}/
+    permissions:
+      id-token: write   # required for PyPI Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Publish
+        run: uv publish --trusted-publishing always dist/*
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: namidiff ${{ needs.build.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ needs.build.outputs.prerelease == 'true' }}
+          files: dist/*
+          body: |
+            Install with:
+
+            ```
+            pip install namidiff==${{ needs.build.outputs.version }}
+            ```
+
+            PyPI: https://pypi.org/project/namidiff/${{ needs.build.outputs.version }}/

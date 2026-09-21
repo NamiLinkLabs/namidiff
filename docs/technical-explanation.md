@@ -1,6 +1,6 @@
 # Technical explanation
 
-Reladiff can diff tables within the same database, or across different databases.
+Namidiff can diff tables within the same database, or across different databases.
 
 **Same-DB Diff:**
 - Uses an outer-join to diff the rows as efficiently and accurately as possible.
@@ -13,7 +13,7 @@ The following is a technical explanation of the cross-db diff.
 
 ### Overview
 
-Reladiff divides the table into smaller segments and computes checksums for each segment in both databases. If the checksums for a segment do not match, it further subdivides that segment and continues checksumming until it identifies the differing row(s).
+Namidiff divides the table into smaller segments and computes checksums for each segment in both databases. If the checksums for a segment do not match, it further subdivides that segment and continues checksumming until it identifies the differing row(s).
 
 This approach has performance within an order of magnitude of count(*) when there are few/no changes, but is able to output each differing row! By pushing the compute into the databases, it's much faster than querying for and comparing every row.
 
@@ -24,7 +24,7 @@ better than MySQL.
 
 ### Deep Dive
 
-In this section we'll be doing a walk-through of exactly how Reladiff
+In this section we'll be doing a walk-through of exactly how Namidiff
 works, and how to tune `--bisection-factor` and `--bisection-threshold`.
 
 Let's consider a scenario with an `orders` table with 1M rows. Fivetran is
@@ -46,7 +46,7 @@ replicating it contionously from PostgreSQL to Snowflake:
 └─────────────┘                        └─────────────┘
 ```
 
-In order to check whether the two tables are the same, Reladiff splits
+In order to check whether the two tables are the same, Namidiff splits
 the table into segemnts. We define `--bisection-factor=10`, so it will start with 10 segments.
 
 We also have to choose which columns we want to checksum. In our case, we care
@@ -54,7 +54,7 @@ about the primary key, `--key-column=id` and the update column
 `--update-column=updated_at`. `updated_at` is updated every time the row is, and
 we have an index on it.
 
-Reladiff starts by querying both databases for the `min(id)` and `max(id)`
+Namidiff starts by querying both databases for the `min(id)` and `max(id)`
 of the table. Then it splits the table into `--bisection-factor=10` segments of
 `1M/10 = 100K` keys each:
 
@@ -79,11 +79,11 @@ of the table. Then it splits the table into `--bisection-factor=10` segments of
                     ┃ checksum queries ┃
                     ┃                  ┃
                   ┌─┻──────────────────┻────┐
-                  │        Reladiff         │
+                  │        Namidiff         │
                   └─────────────────────────┘
 ```
 
-Now Reladiff will start running `--threads=1` queries in parallel that
+Now Namidiff will start running `--threads=1` queries in parallel that
 checksum each segment. The queries for checksumming each segment will look
 something like this, depending on the database:
 
@@ -100,7 +100,7 @@ to a minimum, making it very performant! Additionally, if you have an index on
 only has to do a partial index scan between `id=1..100k`.
 
 If you are not sure whether the queries are using an index, you can run it with
-`--interactive`. This puts Reladiff in interactive mode, where it shows an
+`--interactive`. This puts Namidiff in interactive mode, where it shows an
 `EXPLAIN` before executing each query, requiring confirmation to proceed.
 
 After running the checksum queries on both sides, we see that all segments
@@ -124,12 +124,12 @@ are the same except `id=100k..200k`:
 └──────────────────────┘              └──────────────────────┘
 ```
 
-Now Reladiff will do exactly as it just did for the _whole table_ for only
+Now Namidiff will do exactly as it just did for the _whole table_ for only
 this segment: Split it into `--bisection-factor` segments.
 
 However, this time, because each segment has `100k/10=10k` entries, which is
 less than the `--bisection-threshold`, it will pull down every row in the segment
-and compare them in memory in Reladiff.
+and compare them in memory in Namidiff.
 
 ```
 ┌──────────────────────┐              ┌──────────────────────┐
@@ -149,7 +149,7 @@ and compare them in memory in Reladiff.
 └──────────────────────┘              └──────────────────────┘
 ```
 
-Finally Reladiff will output the `(id, updated_at)` for each row that was different:
+Finally Namidiff will output the `(id, updated_at)` for each row that was different:
 
 ```
 (122001, 1653672821)
@@ -171,17 +171,17 @@ If you pass `--stats` you'll see stats such as the % of rows were different.
 * If the table is _very_ large, consider a larger `--bisection-factor`. Otherwise, you may run into timeouts.
 * If there are a lot of changes, consider a larger `--bisection-threshold`.
 * If there are very large gaps in your key column (e.g., 10s of millions of
-  continuous rows missing), then Reladiff may perform poorly, doing lots of
+  continuous rows missing), then Namidiff may perform poorly, doing lots of
   queries for ranges of rows that do not exist. We have ideas on how to tackle this issue, which we have yet to implement. If you're experiencing this effect, please open an issue, and we
   will prioritize it.
 * The fewer columns you verify (passed with `--columns`), the faster
-  Reladiff will be. On one extreme, you can verify every column; on the
+  Namidiff will be. On one extreme, you can verify every column; on the
   other, you can verify _only_ `updated_at`, if you trust it enough. You can also
   _only_ verify `id` if you're interested in only presence, such as to detect
   missing hard deletes. You can do also do a hybrid where you verify
   `updated_at` and the most critical value, such as a money value in `amount`, but
   not verify a large serialized column like `json_settings`.
-* We have ideas for making Reladiff even faster that
+* We have ideas for making Namidiff even faster that
   we haven't implemented yet: faster checksums by reducing type-casts
   and using a faster hash than MD5, dynamic adaptation of
   `bisection_factor`/`threads`/`bisection_threshold` (especially with large key
