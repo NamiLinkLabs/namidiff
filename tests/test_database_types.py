@@ -339,28 +339,6 @@ DATABASE_TYPES = {
             "boolean",
         ],
     },
-    db.Vertica: {
-        "int": ["int"],
-        "datetime": [
-            "timestamp(6) without time zone",
-            "timestamp(3) without time zone",
-            "timestamp(0) without time zone",
-            "timestamp with time zone",
-        ],
-        "float": [
-            "numeric(6, 2)",
-            "float",
-            "float8",
-        ],
-        "uuid_string": [
-            "varchar(100)",
-            "char(100)",
-        ],
-        "uuid_native": [],
-        "boolean": [
-            "boolean",
-        ],
-    },
 }
 
 

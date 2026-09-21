@@ -33,6 +33,7 @@ namidiff/          # Top-level Python package (public API + CLI)
     redshift.py
     clickhouse.py
     trino.py / presto.py / vertica.py / databricks.py / dremio.py
+    # vertica.py is unmaintained: Vertica CE image is gone, so no tests/CI/docker service
 
 tests/             # unittest-based test suite
   common.py        # DB connection strings + shared helpers

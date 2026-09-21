@@ -11,7 +11,7 @@
 | BigQuery      |  💛    | `bigquery://<project>/<dataset>`                                |
 | Oracle        |  💛    | `oracle://<username>:<password>@<hostname>/database`            |
 | Presto        |  💛    | `presto://<username>:<password>@<hostname>:8080/<database>`     |
-| Vertica       |  💛    | `vertica://<username>:<password>@<hostname>:5433/<database>`   |
+| Vertica       |  🪦    | `vertica://<username>:<password>@<hostname>:5433/<database>`   |
 | Clickhouse    |  💛    | `clickhouse://<username>:<password>@<hostname>:9000/<database>` |
 | Databricks    |  💛    | `databricks://<http_path>:<access_token>@<server_hostname>/<catalog>/<schema>`     |
 | SQLite        |  📝    |                                                                                                                                     |
@@ -20,6 +20,9 @@
 * 💛: Implemented, but not thoroughly tested yet.
 * ⏳: Implementation in progress.
 * 📝: Implementation planned. Contributions welcome.
+* 🪦: Unmaintained. Code is still shipped, but untested (see note below).
+
+**Vertica is no longer maintained.** The Vertica Community Edition docker image is no longer available, so there is no way to run Vertica in CI. Its tests have been removed; the dialect remains but may break without notice.
 
 
 #### Looking for a database not on the list?

@@ -24,7 +24,6 @@ TEST_DATABASES = {
     db.Redshift,
     db.Presto,
     db.Trino,
-    db.Vertica,
 }
 
 test_each_database = test_each_database_in_list(TEST_DATABASES)

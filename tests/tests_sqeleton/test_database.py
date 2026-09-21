@@ -22,7 +22,6 @@ TEST_DATABASES = {
     # dbs.BigQuery,
     # dbs.Snowflake,
     # dbs.Redshift,
-    # dbs.Vertica,
 }
 
 test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)

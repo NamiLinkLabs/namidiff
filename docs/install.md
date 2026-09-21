@@ -67,3 +67,5 @@ pip install namidiff[trino]
 pip install namidiff[clickhouse]
 pip install namidiff[vertica]
 ```
+
+> **Note:** Vertica support is unmaintained and untested, since the Vertica Community Edition image is no longer available.
