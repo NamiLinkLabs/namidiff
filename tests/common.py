@@ -24,7 +24,8 @@ TEST_SNOWFLAKE_CONN_STRING: str = os.environ.get("SNOWFLAKE_URI") or None
 TEST_PRESTO_CONN_STRING: str = os.environ.get("PRESTO_URI") or None
 TEST_BIGQUERY_CONN_STRING: str = os.environ.get("BIGQUERY_URI") or None
 TEST_REDSHIFT_CONN_STRING: str = os.environ.get("REDSHIFT_URI") or None
-TEST_ORACLE_CONN_STRING: str = None
+# oracle uri for provided docker - "oracle://oracle:Password1@localhost/app"
+TEST_ORACLE_CONN_STRING: str = os.environ.get("ORACLE_URI") or None
 TEST_DATABRICKS_CONN_STRING: str = os.environ.get("DATABRICKS_URI")
 TEST_TRINO_CONN_STRING: str = os.environ.get("TRINO_URI") or None
 # clickhouse uri for provided docker - "clickhouse://clickhouse:Password1@localhost:9000/clickhouse"

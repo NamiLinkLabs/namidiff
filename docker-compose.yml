@@ -50,6 +50,19 @@ services:
       networks:
         - local
 
+    oracle:
+      container_name: dd-oracle
+      image: gvenzl/oracle-free:slim-faststart
+      restart: always
+      volumes:
+        - oracle-volume:/opt/oracle/oradata
+      ports:
+        - '1521:1521'
+      env_file:
+        - dev/dev.env
+      networks:
+        - local
+
     clickhouse:
       container_name: dd-clickhouse
       image: clickhouse/clickhouse-server:21.12.3.32
@@ -105,6 +118,7 @@ volumes:
   postgresql-data:
   mysql-data:
   clickhouse-data:
+  oracle-volume:
 
 networks:
   local:
