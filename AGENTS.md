@@ -118,3 +118,4 @@ Entry point: `namidiff.__main__:main` (Click-based).
 - Format with `black -l 120`.
 - No type annotations required but preferred for new public API.
 - Queries are built via the compiler (`namidiff/sqeleton/abcs/compiler.py`) — avoid raw f-string SQL except inside dialect methods.
+Read HANDOFF.md if present before continue

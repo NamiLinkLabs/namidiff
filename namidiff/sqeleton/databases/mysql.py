@@ -101,7 +101,7 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         # Boolean
         "boolean": Boolean,
     }
-    MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample}
+    MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample, Mixin_Regex}
 
     def quote(self, s: str):
         return f"`{s}`"

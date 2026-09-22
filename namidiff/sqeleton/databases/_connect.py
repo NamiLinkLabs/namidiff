@@ -168,7 +168,7 @@ class Connect:
             kw["access_token"] = dsn.password
             kw["http_path"] = dsn.path
             kw["server_hostname"] = dsn.host
-            kw.update(dsn.query)
+            kw.update(urllib.parse.parse_qsl(dsn.query))
         elif scheme == "duckdb":
             kw = {}
             kw["filepath"] = dsn.dbname

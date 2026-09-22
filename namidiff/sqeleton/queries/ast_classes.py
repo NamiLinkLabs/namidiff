@@ -1003,7 +1003,6 @@ class _ResolveColumn(ExprNode, LazyOps):
 
     def _get_resolved(self) -> Expr:
         if self.resolved is None:
-            breakpoint()
             raise QueryBuilderError(f"Column not resolved: {self.resolve_name}")
         return self.resolved
 

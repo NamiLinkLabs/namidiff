@@ -63,13 +63,13 @@ def sample(table_expr):
 
 def create_temp_table(c: Compiler, path: TablePath, expr: Expr) -> str:
     db = c.database
-    c = c.replace(root=False)  # we're compiling fragments, not full queries
+    c = c.replace(_is_root=False)  # we're compiling fragments, not full queries
     if isinstance(db, BigQuery):
         return f"create table {c.compile(path)} OPTIONS(expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)) as {c.compile(expr)}"
     elif isinstance(db, Presto):
         return f"create table {c.compile(path)} as {c.compile(expr)}"
     elif isinstance(db, Oracle):
-        return f"create global temporary table {c.compile(path)} as {c.compile(expr)}"
+        return f"create global temporary table {c.compile(path)} on commit preserve rows as {c.compile(expr)}"
     else:
         return f"create temporary table {c.compile(path)} as {c.compile(expr)}"
 
@@ -362,9 +362,11 @@ class JoinDiffer(TableDiffer):
             count = yield exclusive_rows.count()
             self.stats["exclusive_count"] = self.stats.get("exclusive_count", 0) + count[0][0]
             sample_rows = yield sample(exclusive_rows.select(*this[list(a_cols)], *this[list(b_cols)]))
-            self.stats["exclusive_sample"] = self.stats.get("exclusive_sample", []) + sample_rows
+            self.stats["exclusive_sample"] = self.stats.get("exclusive_sample", []) + list(sample_rows)
 
             # Only drops if create table succeeded (meaning, the table didn't already exist)
+            if isinstance(db, Oracle):
+                yield exclusive_rows.truncate()  # Oracle can't drop a temporary table that holds rows (ORA-14452)
             yield exclusive_rows.drop()
 
         # Run as a sequence of thread-local queries (compiled into a ThreadLocalInterpreter)

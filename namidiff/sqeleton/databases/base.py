@@ -379,8 +379,8 @@ class Database(AbstractDatabase[T]):
             explained_sql = compiler.compile_with_args(Explain(query_input))
             explain = self._query(explained_sql)
             for row in explain:
-                # Most returned a 1-tuple. Presto returns a string
-                if isinstance(row, tuple):
+                # Most returned a 1-tuple. Presto returns a string. DuckDB returns (explain_key, explain_value)
+                if isinstance(row, tuple) and len(row) == 1:
                     (row,) = row
                 logger.debug("EXPLAIN: %s", row)
             answer = input("Continue? [y/n] ")
@@ -416,6 +416,7 @@ class Database(AbstractDatabase[T]):
             return tuple(res[0])
         else:
             # TODO fix this API from runtype side
+            orig_res_type = res_type
             res_type = pytypes.type_caster.to_canon(res_type)
             if isinstance(res_type, pytypes.SequenceType):
                 item_type = res_type.item
@@ -433,7 +434,7 @@ class Database(AbstractDatabase[T]):
                 return None  # TODO: Only allow if res_type is Optional
             assert len(res) == 1, len(res)
             d = dict(safezip(res.columns, res[0]))
-            return res_type(**d)
+            return orig_res_type(**d)  # The canonical runtype type isn't callable
         return res
 
     def enable_interactive(self):

@@ -12,6 +12,7 @@ from ..abcs.database_types import (
     TemporalType,
     Native_UUID,
     Text,
+    StringType,
     FractionalType,
     Boolean,
     AbstractTable,
@@ -63,6 +64,11 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
     def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
         return self.to_string(f"{value}::INTEGER")
+
+    def normalize_text(self, value: str, coltype: StringType) -> str:
+        if self.empty_string_as_null:
+            return f"NULLIF({value}::VARCHAR, '')"
+        return self.to_string(value)
 
 
 class Mixin_RandomSample(AbstractMixin_RandomSample):
