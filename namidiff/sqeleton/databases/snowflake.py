@@ -68,11 +68,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         if isinstance(coltype, Float):
-            if coltype.rounds:
-                # Peer is exact Decimal; round so float noise (e.g. 17.9899999) maps to the exact value
-                return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
-            # Peer is also Float; truncate to suppress float32/float64 noise going opposite directions
-            return self.to_string(f"cast(truncate({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
+            return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
         return self.to_string(f"cast({value} as decimal(38, {coltype.precision}))")
 
     def normalize_boolean(self, value: str, _coltype: Boolean) -> str:

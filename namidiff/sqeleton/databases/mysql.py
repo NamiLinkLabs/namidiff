@@ -49,9 +49,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         if isinstance(coltype, Float):
-            if coltype.rounds:
-                return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
-            return self.to_string(f"cast(truncate({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
+            return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
         return self.to_string(f"cast({value} as decimal(38, {coltype.precision}))")
 
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:

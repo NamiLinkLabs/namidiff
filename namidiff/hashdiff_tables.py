@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 # from runtype import dataclass     # TODO fix in runtype
 
 from namidiff.sqeleton.abcs import ColType_UUID, NumericType, PrecisionType, StringType, Boolean
-from namidiff.sqeleton.abcs.database_types import Float
 
 from .info_tree import InfoTree
 from .utils import safezip
@@ -151,20 +150,12 @@ class HashDiffer(TableDiffer):
                 if col1.precision != col2.precision:
                     logger.warning(f"Using reduced precision {lowest} for column '{c1}'. Types={col1}, {col2}")
 
-                both_float = isinstance(col1, Float) and isinstance(col2, Float)
-
-                new_col1 = col1.replace(precision=lowest.precision) if lowest.precision != col1.precision else col1
-                new_col2 = col2.replace(precision=lowest.precision) if lowest.precision != col2.precision else col2
-
-                # Float vs Float: truncate to suppress float32/float64 noise going opposite directions (rounds=False)
-                # Float vs Decimal: round the Float so it matches the exact decimal value (rounds=True)
-                if isinstance(col1, Float):
-                    new_col1 = new_col1.replace(rounds=not both_float)
-                if isinstance(col2, Float):
-                    new_col2 = new_col2.replace(rounds=not both_float)
-
-                table1._schema[c1] = new_col1
-                table2._schema[c2] = new_col2
+                # Floats are always rounded (never truncated): float32/float64 noise can go in opposite
+                # directions (17.9899999 vs 17.9900001), and truncation would split them into different values.
+                if lowest.precision != col1.precision:
+                    table1._schema[c1] = col1.replace(precision=lowest.precision)
+                if lowest.precision != col2.precision:
+                    table2._schema[c2] = col2.replace(precision=lowest.precision)
 
             elif isinstance(col1, ColType_UUID):
                 if not isinstance(col2, ColType_UUID):
