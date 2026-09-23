@@ -55,7 +55,7 @@ mysql = ["mysql-connector-python>=8.0.29"]
 postgresql = ["psycopg2-binary"]
 snowflake = ["snowflake-connector-python>=2.7.2", "cryptography"]
 presto = ["presto-python-client"]
-oracle = ["cx_Oracle"]
+oracle = ["oracledb"]
 # databricks = ["databricks-sql-connector"]
 trino = ["trino>=0.314.0"]
 clickhouse = ["clickhouse-driver"]
@@ -79,7 +79,7 @@ all = [
     "snowflake-connector-python>=2.7.2",
     "cryptography",
     "presto-python-client",
-    "cx_Oracle",
+    "oracledb",
     "trino>=0.314.0",
     "clickhouse-driver",
     "vertica-python",
@@ -97,6 +97,7 @@ dev = [
     "cryptography",
     "trino>=0.314.0",
     "presto-python-client",
+    "oracledb",
     "clickhouse-driver",
     "vertica-python",
     "duckdb<1.2",

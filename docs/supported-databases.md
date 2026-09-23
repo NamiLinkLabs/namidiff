@@ -9,7 +9,7 @@
 | DuckDB >= 0.6       |  💚    | `duckdb://<file>`  |
 | Trino         |  💚    | `trino://<username>:<password>@<hostname>:8080/<database>`      |
 | BigQuery      |  💛    | `bigquery://<project>/<dataset>`                                |
-| Oracle        |  💛    | `oracle://<username>:<password>@<hostname>/database`            |
+| Oracle        |  💛    | `oracle://<username>:<password>@<hostname>:1521/<service_name>[?thick_mode=true&lib_dir=<path>]` (see note) |
 | Presto        |  💛    | `presto://<username>:<password>@<hostname>:8080/<database>`     |
 | Vertica       |  🪦    | `vertica://<username>:<password>@<hostname>:5433/<database>`   |
 | Clickhouse    |  💛    | `clickhouse://<username>:<password>@<hostname>:9000/<database>` |
@@ -51,6 +51,51 @@ INSTALL COMPONENT 'file://component_classic_hashing';
 namidiff cannot switch to `SHA2()` instead: row checksums must match the `MD5()` computed by the database on the other side of the diff. On managed services (RDS, Aurora, Cloud SQL, Azure), check whether your provider allows installing components.
 
 See the [MySQL Legacy Hashing Component docs](https://dev.mysql.com/doc/refman/9.7/en/legacy-hashing-component.html).
+
+### Oracle: thin and thick mode
+
+namidiff connects to Oracle with [python-oracledb](https://python-oracledb.readthedocs.io/), the successor of `cx_Oracle`. `cx_Oracle` is no longer maintained and does not install on Python 3.12+. `pip install namidiff[oracle]` installs `oracledb`; `cx_Oracle` is not needed any more and can be uninstalled.
+
+`oracledb` has two modes:
+
+- **Thin mode** (default): pure Python, no Oracle client libraries needed. Works with most servers.
+- **Thick mode**: loads the Oracle Instant Client. Needed for features thin mode lacks, most commonly servers that enforce Native Network Encryption. In thin mode these fail with:
+
+  ```
+  DPY-3001: Native Network Encryption and Data Integrity is only supported in python-oracledb thick mode
+  ```
+
+  See Oracle's [feature comparison](https://python-oracledb.readthedocs.io/en/latest/user_guide/appendix_a.html) for the full list.
+
+#### Enabling thick mode
+
+1. Download the **Basic** or **Basic Light** package of the [Oracle Instant Client](https://www.oracle.com/database/technologies/instant-client/downloads.html) for your OS. The architecture must match your Python (`python -c "import platform; print(platform.machine())"`). On Apple Silicon (arm64) use Instant Client 23ai or newer, since 19c is x86_64 only.
+2. Unzip it (on macOS, mount the DMG and run its `install_ic.sh`, or copy the files) into a directory, e.g. `~/oracle/instantclient`.
+3. Tell namidiff to use it, with the `lib_dir` parameter. Setting `lib_dir` turns thick mode on:
+
+   ```sh
+   namidiff "oracle://user:pass@host:1521/SERVICE?lib_dir=/Users/me/oracle/instantclient" TABLE1 \
+            "snowflake://..." TABLE2
+   ```
+
+   or in a [configuration file](https://namidiff.namilink.com/how-to-use.html#how-to-use-with-a-configuration-file):
+
+   ```toml
+   [database.my_oracle]
+   driver = "oracle"
+   host = "host"
+   port = 1521
+   database = "SERVICE"
+   user = "user"
+   password = "pass"
+   lib_dir = "/Users/me/oracle/instantclient"
+   ```
+
+On Linux, you can instead put the Instant Client on the library search path (`LD_LIBRARY_PATH`, or `ldconfig`) and pass `thick_mode=true` without `lib_dir`. On Windows, add it to `PATH`. On macOS always pass `lib_dir`: System Integrity Protection strips `DYLD_LIBRARY_PATH` when system binaries such as the shell are launched, so it often never reaches Python.
+
+Thick mode is process-wide. It is enabled when the first Oracle connection that asks for it is created, and it cannot be enabled after a thin connection has been opened in the same process. If the client libraries cannot be loaded, the connection fails with an error that names `lib_dir`. It does not silently fall back to thin mode.
+
+Python API users can also call `oracledb.init_oracle_client(lib_dir=...)` themselves before connecting.
 
 #### Looking for a database not on the list?
 If a database is not on the list, we'd still love to support it. [Please open an issue](https://github.com/NamiLinkLabs/namidiff/issues) to discuss it, or vote on existing requests to push them up our todo list.

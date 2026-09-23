@@ -35,9 +35,26 @@ SESSION_TIME_ZONE = None  # Changed by the tests
 
 @import_helper("oracle")
 def import_oracle():
-    import cx_Oracle
+    import oracledb
 
-    return cx_Oracle
+    return oracledb
+
+
+def init_thick_mode(oracledb, lib_dir: Optional[str] = None):
+    """Switch python-oracledb to thick mode, which loads the Oracle Instant Client.
+
+    Thick mode is process-wide and must be enabled before the first connection.
+    """
+    if not oracledb.is_thin_mode():
+        return  # already enabled
+    try:
+        # lib_dir=None: use the platform search path (LD_LIBRARY_PATH on Linux, PATH on Windows)
+        oracledb.init_oracle_client(lib_dir=lib_dir)
+    except Exception as e:
+        raise ConnectError(
+            f"Could not enable Oracle thick mode (lib_dir={lib_dir!r}): {e}. "
+            "Install the Oracle Instant Client and pass its directory as 'lib_dir'."
+        ) from e
 
 
 class Mixin_MD5(AbstractMixin_MD5):
@@ -177,11 +194,16 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
 
 class Oracle(ThreadedDatabase):
     dialect = Dialect()
-    CONNECT_URI_HELP = "oracle://<user>:<password>@<host>:port/<database>"
+    CONNECT_URI_HELP = "oracle://<user>:<password>@<host>:port/<database>[?thick_mode=true&lib_dir=<path>]"
     CONNECT_URI_PARAMS = ["database?"]
 
-    def __init__(self, *, host, database, thread_count, port=None, **kw):
+    def __init__(self, *, host, database, thread_count, port=None, thick_mode=False, lib_dir=None, **kw):
         self.kwargs = kw
+
+        # Thin mode (default) needs no client libraries. Thick mode is needed e.g. for
+        # servers that enforce Native Network Encryption (DPY-3001 in thin mode).
+        if lib_dir or str(thick_mode).lower() in ("1", "true", "yes"):
+            init_thick_mode(import_oracle(), lib_dir)
 
         # Build dsn if not present
         if "dsn" not in kw:
