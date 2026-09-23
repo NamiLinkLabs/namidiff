@@ -45,7 +45,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Build the stack
-        run: docker compose up -d mysql postgres trino clickhouse
+        run: docker compose up -d --wait mysql postgres trino clickhouse presto
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -73,10 +73,10 @@ jobs:
       - name: Run unit tests
         env:
             # SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
-            # PRESTO_URI: '${{ secrets.PRESTO_URI }}'
+            PRESTO_URI: 'presto://presto@127.0.0.1:8080/postgresql/public'
             TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
             # BIGQUERY_URI: '${{ secrets.BIGQUERY_URI }}'
             CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
             REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
         run: |
-          TEST_ACROSS_ALL_DBS=0 uv run unittest-parallel -j 16
+          TEST_ACROSS_ALL_DBS=0 uv run unittest-parallel -j 4

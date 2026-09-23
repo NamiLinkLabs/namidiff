@@ -26,7 +26,7 @@ services:
 
     mysql:
       container_name: dd-mysql
-      image: mysql:oracle
+      image: mysql:8.4
       # fsync less aggressively for insertion perf for test setup
       command: >
         --binlog-cache-size=16M
@@ -65,7 +65,7 @@ services:
 
     clickhouse:
       container_name: dd-clickhouse
-      image: clickhouse/clickhouse-server:21.12.3.32
+      image: clickhouse/clickhouse-server:22.3
       restart: always
       volumes:
           - clickhouse-data:/var/lib/clickhouse:delegated
@@ -96,6 +96,11 @@ services:
             - ./dev/presto-conf/standalone:/opt/presto/etc:ro
         ports:
             - '8080:8080'
+        healthcheck:
+            test: ["CMD", "presto", "--execute", "SELECT 1"]
+            interval: 5s
+            timeout: 10s
+            retries: 30
         tty: true
         networks:
             - local
