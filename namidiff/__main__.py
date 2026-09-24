@@ -238,7 +238,7 @@ def main(conf, run, **kw):
         return _main(**kw)
     except Exception as e:
         logging.error(e)
-        if kw["debug"]:
+        if kw["debug"] or kw["interactive"]:
             raise
 
 

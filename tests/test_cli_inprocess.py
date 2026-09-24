@@ -139,6 +139,13 @@ class TestCLIInProcess(unittest.TestCase):
         res = self.run_cli(self.uri1, "src", "dst", "-c", "nope", "-d", catch_exceptions=True)
         assert isinstance(res.exception, ValueError)
 
+        # -i implies debug, so errors are raised too
+        try:
+            res = self.run_cli(self.uri1, "src", "dst", "-c", "nope", "-i", input="y\n" * 100, catch_exceptions=True)
+        finally:
+            self.db1.__dict__.pop("_interactive", None)  # Shared connection; restore the class default
+        assert isinstance(res.exception, ValueError), res.exception
+
     def test_schema_mismatch_warning(self):
         with self.assertLogs(level="WARNING") as cm:
             self.run_cli(self.uri1, "src", "other_types", "-c", "text_comment", "-a", "hashdiff", "--case-sensitive")
