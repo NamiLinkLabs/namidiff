@@ -115,7 +115,7 @@ class ThreadLocalInterpreter:
                 try:
                     res = callback(sql) if sql is not SKIP else SKIP
                 except Exception as e:
-                    q = self.gen.throw(type(e), e)
+                    q = self.gen.throw(e)
                 else:
                     q = self.gen.send(res)
             except StopIteration:
