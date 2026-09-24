@@ -60,6 +60,11 @@ services:
         - '1521:1521'
       env_file:
         - dev/dev.env
+      healthcheck:
+        test: ["CMD", "healthcheck.sh"]
+        interval: 5s
+        timeout: 10s
+        retries: 60
       networks:
         - local
 
