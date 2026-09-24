@@ -26,7 +26,7 @@ services:
 
     mysql:
       container_name: dd-mysql
-      image: mysql:oracle
+      image: mysql:8.4
       # fsync less aggressively for insertion perf for test setup
       command: >
         --binlog-cache-size=16M
@@ -50,9 +50,27 @@ services:
       networks:
         - local
 
+    oracle:
+      container_name: dd-oracle
+      image: gvenzl/oracle-free:slim-faststart
+      restart: always
+      volumes:
+        - oracle-volume:/opt/oracle/oradata
+      ports:
+        - '1521:1521'
+      env_file:
+        - dev/dev.env
+      healthcheck:
+        test: ["CMD", "healthcheck.sh"]
+        interval: 5s
+        timeout: 10s
+        retries: 60
+      networks:
+        - local
+
     clickhouse:
       container_name: dd-clickhouse
-      image: clickhouse/clickhouse-server:21.12.3.32
+      image: clickhouse/clickhouse-server:22.3
       restart: always
       volumes:
           - clickhouse-data:/var/lib/clickhouse:delegated
@@ -83,6 +101,11 @@ services:
             - ./dev/presto-conf/standalone:/opt/presto/etc:ro
         ports:
             - '8080:8080'
+        healthcheck:
+            test: ["CMD", "presto", "--execute", "SELECT 1"]
+            interval: 5s
+            timeout: 10s
+            retries: 30
         tty: true
         networks:
             - local
@@ -98,23 +121,6 @@ services:
         networks:
             - local
 
-    vertica:
-      container_name: dd-vertica
-      image: vertica/vertica-ce:12.0.0-0
-      restart: always
-      volumes:
-          - vertica-data:/data:delegated
-      ports:
-        - '5433:5433'
-        - '5444:5444'
-      expose:
-        - '5433'
-        - '5444'
-      env_file:
-        - dev/dev.env
-      tty: true
-      networks:
-      - local
 
 
 
@@ -122,7 +128,7 @@ volumes:
   postgresql-data:
   mysql-data:
   clickhouse-data:
-  vertica-data:
+  oracle-volume:
 
 networks:
   local:

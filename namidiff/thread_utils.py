@@ -18,7 +18,12 @@ class AutoPriorityQueue(PriorityQueue):
     _counter = itertools.count().__next__
 
     def put(self, item: Optional[_WorkItem], block=True, timeout=None):
-        priority = item.kwargs.pop("priority") if item is not None else 0
+        if item is None:
+            priority = 0
+        else:
+            # Python 3.14+ stores (fn, args, kwargs) in _WorkItem.task
+            kwargs = item.kwargs if hasattr(item, "kwargs") else item.task[2]
+            priority = kwargs.pop("priority")
         super().put((-priority, self._counter(), item), block, timeout)
 
     def get(self, block=True, timeout=None) -> Optional[_WorkItem]:

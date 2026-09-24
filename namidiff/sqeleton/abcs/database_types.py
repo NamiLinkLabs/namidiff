@@ -66,10 +66,7 @@ class IKey(ABC):
         return self.python_type(value)
 
 
-@dataclass
 class Float(FractionalType, IKey):
-    rounds: Union[bool, Unknown] = Unknown
-
     @property
     def python_type(self) -> type:
         if self.precision == 0:

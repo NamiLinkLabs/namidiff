@@ -21,13 +21,13 @@ Python API Reference
 .. autoclass:: DiffResultWrapper
     :members: __iter__, close, get_stats_dict, get_stats_string
 
-.. autoclass:: namidiff.databases.database_types.AbstractDatabase
+.. autoclass:: namidiff.sqeleton.abcs.database_types.AbstractDatabase
     :members:
 
-.. autoclass:: namidiff.databases.database_types.AbstractDialect
+.. autoclass:: namidiff.sqeleton.abcs.database_types.AbstractDialect
     :members:
 
-.. autodata:: DbKey
-.. autodata:: DbTime
-.. autodata:: DbPath
+.. autodata:: namidiff.sqeleton.abcs.database_types.DbKey
+.. autodata:: namidiff.sqeleton.abcs.database_types.DbTime
+.. autodata:: namidiff.sqeleton.abcs.database_types.DbPath
 .. autoenum:: Algorithm

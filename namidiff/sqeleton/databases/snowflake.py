@@ -52,23 +52,23 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         if isinstance(coltype, Date):
             # DATE has no time component; epoch_nanosecond is invalid on DATE
             timestamp = f"cast({value} as timestamp_ntz(0))"
-        elif coltype.rounds:
-            # Round the epoch to the desired precision, then reconstruct timestamp
-            timestamp = f"to_timestamp_ntz(round(date_part(epoch_nanosecond, {value})::number / 1000000000, 3))"
         else:
-            # Truncate by casting to lower precision (truncation, no rounding)
-            timestamp = f"cast({value} as timestamp_ntz(3))"
+            # With timestamp_precision set, truncate to it regardless of the column's precision
+            p = coltype.precision if self.timestamp_precision is None else self.timestamp_precision
+            if coltype.rounds and self.timestamp_precision is None:
+                # Round the epoch to the desired precision, then reconstruct timestamp
+                timestamp = f"to_timestamp_ntz(round(date_part(epoch_nanosecond, {value})::number / 1000000000, {p}))"
+            else:
+                # Truncate by casting to lower precision (truncation, no rounding)
+                timestamp = f"cast({value} as timestamp_ntz({p}))"
 
-        # Always format with exactly 3 fractional digits to match MySQL output
-        return f"to_char({timestamp}::timestamp_ntz(3), 'YYYY-MM-DD HH24:MI:SS.FF3')"
+        # Format with timestamp_precision fractional digits (default 6)
+        digits = 6 if self.timestamp_precision is None else self.timestamp_precision
+        return f"to_char({timestamp}::timestamp_ntz({digits}), 'YYYY-MM-DD HH24:MI:SS.FF{digits}')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         if isinstance(coltype, Float):
-            if coltype.rounds:
-                # Peer is exact Decimal; round so float noise (e.g. 17.9899999) maps to the exact value
-                return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
-            # Peer is also Float; truncate to suppress float32/float64 noise going opposite directions
-            return self.to_string(f"cast(truncate({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
+            return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
         return self.to_string(f"cast({value} as decimal(38, {coltype.precision}))")
 
     def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
@@ -124,6 +124,7 @@ class Mixin_TimeTravel(AbstractMixin_TimeTravel):
 
 class Dialect(BaseDialect, Mixin_Schema):
     name = "Snowflake"
+    SUPPORTS_TIMESTAMP_PRECISION = True
     ROUNDS_ON_PREC_LOSS = False
     TYPE_CLASSES = {
         # Timestamps

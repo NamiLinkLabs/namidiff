@@ -98,6 +98,10 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
         value = f"formatDateTime({value}, '%Y-%m-%d %H:%M:%S') || '.' || {self.to_string(fractional)}"
         return f"rpad({value}, {TIMESTAMP_PRECISION_POS + 6}, '0')"
 
+    def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
+        # toString(Bool) gives 'true'/'false' on ClickHouse >= 22; other dbs emit 0/1
+        return self.to_string(f"toUInt8({value})")
+
 
 class Dialect(BaseDialect):
     name = "Clickhouse"

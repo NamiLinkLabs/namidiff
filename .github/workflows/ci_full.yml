@@ -18,6 +18,13 @@ on:
 
     branches: [ main ]
   workflow_dispatch:
+  # Called by release.yml: every release runs the full Python matrix before publishing
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to test (default: the triggering commit)"
+        type: string
+        default: ''
 
 permissions:
   id-token: write # This is required for requesting the JWT
@@ -29,13 +36,15 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version:
-          - "3.10"
+        # PRs test one version to save compute; releases and manual runs test all of them
+        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || '["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]') }}
 
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Setup Python ${{ matrix.python-version }}
         uses: actions/setup-python@v3
@@ -43,7 +52,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Build the stack
-        run: docker compose up -d mysql postgres trino vertica # presto clickhouse
+        run: docker compose up -d --wait mysql postgres trino presto clickhouse oracle
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
@@ -69,11 +78,10 @@ jobs:
         env:
             TRINO_URI: 'trino://postgres@127.0.0.1:8081/postgresql/public'
             SNOWFLAKE_URI: '${{ secrets.SNOWFLAKE_URI }}'
-            # PRESTO_URI: '${{ secrets.PRESTO_URI }}'
-            # CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
-            VERTICA_URI: 'vertica://vertica:Password1@localhost:5433/vertica'
+            PRESTO_URI: 'presto://presto@127.0.0.1:8080/postgresql/public'
+            CLICKHOUSE_URI: 'clickhouse://clickhouse:Password1@localhost:9000/clickhouse'
+            ORACLE_URI: 'oracle://oracle:Password1@localhost/app'
             # BIGQUERY_URI: '${{ secrets.BIGQUERY_URI }}'
             REDSHIFT_URI: '${{ secrets.REDSHIFT_URI }}'
         run: |
-          chmod +x tests/waiting_for_stack_up.sh
-          ./tests/waiting_for_stack_up.sh && uv run unittest-parallel -j 16
+          uv run unittest-parallel -j 4

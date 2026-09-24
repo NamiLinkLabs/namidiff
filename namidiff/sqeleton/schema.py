@@ -45,7 +45,7 @@ class _Schema(CaseAwareMapping[Union[type, _Field]]):
                 field = getattr(schema, k)
                 if field:
                     if not isinstance(field, Options):
-                        field = Options(default=v)
+                        field = Options(default=field)
                     return _Field(v, field)
                 return v
 

@@ -41,7 +41,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/NamiLinkLabs/namidiff"
 Repository = "https://github.com/NamiLinkLabs/namidiff"
-Documentation = "https://github.com/NamiLinkLabs/namidiff/tree/main/docs"
+Documentation = "https://namidiff.namilink.com/"
 "Bug Tracker" = "https://github.com/NamiLinkLabs/namidiff/issues"
 "Upstream (reladiff)" = "https://github.com/erezsh/reladiff"
 "Upstream (sqeleton)" = "https://github.com/erezsh/sqeleton"
@@ -55,7 +55,7 @@ mysql = ["mysql-connector-python>=8.0.29"]
 postgresql = ["psycopg2-binary"]
 snowflake = ["snowflake-connector-python>=2.7.2", "cryptography"]
 presto = ["presto-python-client"]
-oracle = ["cx_Oracle"]
+oracle = ["oracledb"]
 # databricks = ["databricks-sql-connector"]
 trino = ["trino>=0.314.0"]
 clickhouse = ["clickhouse-driver"]
@@ -79,7 +79,7 @@ all = [
     "snowflake-connector-python>=2.7.2",
     "cryptography",
     "presto-python-client",
-    "cx_Oracle",
+    "oracledb",
     "trino>=0.314.0",
     "clickhouse-driver",
     "vertica-python",
@@ -97,6 +97,7 @@ dev = [
     "cryptography",
     "trino>=0.314.0",
     "presto-python-client",
+    "oracledb",
     "clickhouse-driver",
     "vertica-python",
     "duckdb<1.2",
@@ -109,6 +110,7 @@ dev = [
     "numpy>=1.26.4; python_version >= '3.9'",
     "numpy>=1.24.4; python_version < '3.9'",
     "sqlalchemy-dremio",
+    "coverage>=7.6.1",
 ]
 
 [tool.uv.sources]
@@ -136,3 +138,33 @@ target-version = "py38"
 [tool.black]
 line-length = 120
 target-version = ['py38']
+
+[tool.coverage.run]
+source = ["namidiff"]
+concurrency = ["thread"]
+omit = [
+    # Interactive / TUI tools
+    "namidiff/sqeleton/repl.py",
+    "namidiff/sqeleton/conn_editor.py",
+    "namidiff/sqeleton/__main__.py",
+    # Re-export shims
+    "namidiff/databases/*.py",
+    # Dialects without a local test server
+    "namidiff/sqeleton/databases/snowflake.py",
+    "namidiff/sqeleton/databases/bigquery.py",
+    "namidiff/sqeleton/databases/redshift.py",
+    "namidiff/sqeleton/databases/databricks.py",
+    "namidiff/sqeleton/databases/dremio.py",
+    "namidiff/sqeleton/databases/vertica.py",
+    "namidiff/sqeleton/databases/mssql.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+    "\\.\\.\\.$",
+]

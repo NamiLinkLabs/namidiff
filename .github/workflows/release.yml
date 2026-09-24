@@ -23,8 +23,19 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  test:
+    name: Full test matrix
+    uses: ./.github/workflows/ci_full.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+    secrets: inherit   # SNOWFLAKE_URI / REDSHIFT_URI
+    permissions:
+      contents: read
+      id-token: write
+
   build:
     name: Build distributions
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

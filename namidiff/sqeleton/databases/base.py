@@ -115,7 +115,7 @@ class ThreadLocalInterpreter:
                 try:
                     res = callback(sql) if sql is not SKIP else SKIP
                 except Exception as e:
-                    q = self.gen.throw(type(e), e)
+                    q = self.gen.throw(e)
                 else:
                     q = self.gen.send(res)
             except StopIteration:
@@ -279,6 +279,9 @@ class BaseDialect(AbstractDialect):
         return math.floor(math.log(2**p, 10))
 
     empty_string_as_null: bool = False
+    # Number of fractional digits timestamps are normalized to. None = column precision, padded to 6 digits.
+    timestamp_precision: Optional[int] = None
+    SUPPORTS_TIMESTAMP_PRECISION = False
 
     @classmethod
     def load_mixins(cls, *abstract_mixins) -> "Self":
@@ -376,8 +379,8 @@ class Database(AbstractDatabase[T]):
             explained_sql = compiler.compile_with_args(Explain(query_input))
             explain = self._query(explained_sql)
             for row in explain:
-                # Most returned a 1-tuple. Presto returns a string
-                if isinstance(row, tuple):
+                # Most returned a 1-tuple. Presto returns a string. DuckDB returns (explain_key, explain_value)
+                if isinstance(row, tuple) and len(row) == 1:
                     (row,) = row
                 logger.debug("EXPLAIN: %s", row)
             answer = input("Continue? [y/n] ")
@@ -413,6 +416,7 @@ class Database(AbstractDatabase[T]):
             return tuple(res[0])
         else:
             # TODO fix this API from runtype side
+            orig_res_type = res_type
             res_type = pytypes.type_caster.to_canon(res_type)
             if isinstance(res_type, pytypes.SequenceType):
                 item_type = res_type.item
@@ -430,7 +434,7 @@ class Database(AbstractDatabase[T]):
                 return None  # TODO: Only allow if res_type is Optional
             assert len(res) == 1, len(res)
             d = dict(safezip(res.columns, res[0]))
-            return res_type(**d)
+            return orig_res_type(**d)  # The canonical runtype type isn't callable
         return res
 
     def enable_interactive(self):
@@ -567,7 +571,11 @@ class Database(AbstractDatabase[T]):
         assert isinstance(sql_code, CompiledCode), sql_code
         try:
             logger.debug(f"{self.name} Executing SQL: {sql_code.code} || {sql_code.args}")
-            c.execute(sql_code.code, sql_code.args or ())
+            # Don't pass empty params: clickhouse_driver treats a tuple as INSERT data
+            if sql_code.args:
+                c.execute(sql_code.code, sql_code.args)
+            else:
+                c.execute(sql_code.code)
             # insert, delete and update may return values if they have the "returning" clause.
             if sql_code.type is not None or sql_code.code.lstrip().lower().startswith(
                 ("select", "explain", "show", "with")
@@ -616,6 +624,26 @@ class Database(AbstractDatabase[T]):
 
         _DialectWithEmptyStringAsNull.__name__ = dialect_cls.__name__
         self.dialect = _DialectWithEmptyStringAsNull()
+
+    def set_timestamp_precision(self, precision: int) -> None:
+        """Configure this database instance to normalize timestamps to `precision` fractional digits (1-6).
+
+        Timestamps are truncated to that precision regardless of column precision,
+        e.g. 3 for replicas that only keep milliseconds (like AWS DMS).
+        Creates a per-instance dialect copy so other connections sharing the same
+        dialect class are not affected.
+        """
+        if not 1 <= precision <= 6:
+            raise ValueError(f"timestamp_precision must be between 1 and 6, got {precision}")
+        dialect_cls = type(self.dialect)
+        if not dialect_cls.SUPPORTS_TIMESTAMP_PRECISION:
+            raise NotImplementedError(f"{dialect_cls.name} does not support timestamp_precision")
+
+        class _DialectWithTimestampPrecision(dialect_cls):
+            timestamp_precision = precision
+
+        _DialectWithTimestampPrecision.__name__ = dialect_cls.__name__
+        self.dialect = _DialectWithTimestampPrecision()
 
     def commit(self):
         return self.query(commit)

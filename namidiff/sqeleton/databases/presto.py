@@ -205,4 +205,5 @@ class Presto(Database):
 
     @property
     def is_autocommit(self) -> bool:
-        return False
+        # prestodb.dbapi.connect() defaults to IsolationLevel.AUTOCOMMIT
+        return True

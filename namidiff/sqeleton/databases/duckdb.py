@@ -12,6 +12,7 @@ from ..abcs.database_types import (
     TemporalType,
     Native_UUID,
     Text,
+    StringType,
     FractionalType,
     Boolean,
     AbstractTable,
@@ -49,17 +50,25 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
+        if self.timestamp_precision is not None:
+            return f"substring(strftime({value}::timestamp, '%Y-%m-%d %H:%M:%S.%f'),1,{TIMESTAMP_PRECISION_POS+self.timestamp_precision})"
+
         # It's precision 6 by default. If precision is less than 6 -> we remove the trailing numbers.
         if coltype.rounds and coltype.precision > 0:
             return f"CONCAT(SUBSTRING(STRFTIME({value}::TIMESTAMP, '%Y-%m-%d %H:%M:%S.'),1,23), LPAD(((ROUND(strftime({value}::timestamp, '%f')::DECIMAL(15,7)/100000,{coltype.precision-1})*100000)::INT)::VARCHAR,6,'0'))"
 
-        return f"rpad(substring(strftime({value}::timestamp, '%Y-%m-%d %H:%M:%S.%f'),1,{TIMESTAMP_PRECISION_POS+3}),26,'0')"
+        return f"rpad(substring(strftime({value}::timestamp, '%Y-%m-%d %H:%M:%S.%f'),1,{TIMESTAMP_PRECISION_POS+coltype.precision}),26,'0')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         return self.to_string(f"{value}::DECIMAL(38, {coltype.precision})")
 
     def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
         return self.to_string(f"{value}::INTEGER")
+
+    def normalize_text(self, value: str, coltype: StringType) -> str:
+        if self.empty_string_as_null:
+            return f"NULLIF({value}::VARCHAR, '')"
+        return self.to_string(value)
 
 
 class Mixin_RandomSample(AbstractMixin_RandomSample):
@@ -77,6 +86,7 @@ class Mixin_Regex(AbstractMixin_Regex):
 
 class Dialect(BaseDialect, Mixin_Schema):
     name = "DuckDB"
+    SUPPORTS_TIMESTAMP_PRECISION = True
     ROUNDS_ON_PREC_LOSS = False
     SUPPORTS_PRIMARY_KEY = True
     SUPPORTS_INDEXES = True
