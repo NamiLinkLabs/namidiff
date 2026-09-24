@@ -81,6 +81,14 @@ class TestBoundExprs(unittest.TestCase):
         bt = bound_table(self.conn, "bound_t", schema={"id": int})
         assert bt.schema["id"] is int
 
+    def test_embed_bound_node_in_query(self):
+        bound = table("bound_t").count().bind(self.conn)
+        q = table("bound_t").alias("o").select(this.id, bound).order_by(this.id)
+        assert self.conn.compile(q) == (
+            'SELECT "id", (SELECT count(*) FROM "bound_t") FROM "bound_t" "o" ORDER BY "id"'
+        )
+        assert self.conn.query(q, list) == [(1, 2), (2, 2)]
+
 
 @test_each_database
 class TestQueryUtils(DbTestCase):
