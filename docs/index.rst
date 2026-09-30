@@ -43,7 +43,7 @@ Key Features
 
 5. **Automation-Friendly**: Outputs both JSON and git-like diffs (with + and -), facilitating easy integration into CI/CD pipelines.
 
-6. **Over a dozen databases supported**: MySQL, Postgres, Snowflake, Bigquery, Oracle, Clickhouse, and more. `See full list <https://reladiff.readthedocs.io/en/latest/supported-databases.html>`_.
+6. **Over a dozen databases supported**: MySQL, Postgres, Snowflake, Bigquery, Oracle, Clickhouse, and more. `See full list <https://namidiff.namilink.com/supported-databases.html>`_.
 
 This documentation covers **namidiff**, the `NamiLink Kft. <https://namilink.com>`_ fork of reladiff (PyPI distribution, Python package and CLI are all ``namidiff``). Reladiff is a fork of an archived project called `data-diff <https://github.com/datafold/data-diff>`_. Code that worked with data-diff should also work with namidiff, without any changes. However, there are a few differences: Namidiff doesn't contain any tracking code. Namidiff doesn't have DBT integration.
 

@@ -6,9 +6,10 @@ from typing import Union, TYPE_CHECKING
 
 from runtype import dataclass
 
-from .abcs import AbstractDatabase, AbstractCompiler
+from .abcs import AbstractDatabase
 from .queries.ast_classes import ExprNode, TablePath, Compilable
 from .queries.api import table
+from .queries.compiler import Compiler, md
 from .schema import create_schema
 
 
@@ -35,9 +36,12 @@ class BoundNode(ExprNode):
     def type(self):
         return self.node.type
 
-    def compile(self, c: AbstractCompiler) -> str:
-        assert c.database is self.database
-        return c.compile_elem(self.node)
+
+class Compiler(Compiler):
+    @md
+    def compile_node(c: Compiler, n: BoundNode) -> str:
+        assert c.database is n.database
+        return c.compile(n.node)
 
 
 def bind_node(node, database):

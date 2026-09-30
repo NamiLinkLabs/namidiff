@@ -5,7 +5,7 @@ from namidiff.sqeleton.abcs import AbstractDatabase, AbstractDialect
 from namidiff.sqeleton.utils import CaseInsensitiveDict, CaseSensitiveDict
 
 from namidiff.sqeleton.queries import Compiler, outerjoin, cte, when, coalesce, CompileError, join
-from namidiff.sqeleton.queries import Random
+from namidiff.sqeleton.queries.ast_classes import Random
 from namidiff.sqeleton import code, this, table
 
 

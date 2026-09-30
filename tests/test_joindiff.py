@@ -24,7 +24,6 @@ TEST_DATABASES = {
     db.Redshift,
     db.Presto,
     db.Trino,
-    db.Vertica,
 }
 
 test_each_database = test_each_database_in_list(TEST_DATABASES)
@@ -132,6 +131,23 @@ class TestJoindiff(DiffTestCase):
         rows = self.connection.query(t.select(), List[tuple])
         assert len(rows) == 2, len(rows)
         self.connection.query(t.drop())
+
+    def test_sample_exclusive_rows(self):
+        time_obj = datetime.fromisoformat("2022-01-01 00:00:00")
+        cols = "id userid movieid rating timestamp".split()
+        self.connection.query(
+            [
+                self.src_table.insert_rows([[1, 1, 1, 9, time_obj], [2, 2, 2, 9, time_obj]], columns=cols),
+                self.dst_table.insert_rows([[1, 1, 1, 9, time_obj], [3, 3, 3, 9, time_obj]], columns=cols),
+                commit,
+            ]
+        )
+
+        differ = self.differ.replace(sample_exclusive_rows=True)
+        diff = list(differ.diff_tables(self.table, self.table2))
+        assert len(diff) == 2, diff
+        assert differ.stats["exclusive_count"] == 2, differ.stats
+        assert len(differ.stats["exclusive_sample"]) == 2, differ.stats
 
     def test_diff_table_above_bisection_threshold(self):
         time = "2022-01-01 00:00:00"

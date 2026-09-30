@@ -18,13 +18,30 @@ on:
         description: "Tag to release (e.g. v0.7.0)"
         required: true
         type: string
+      full_matrix:
+        description: "Test Python 3.11-3.14 instead of only 3.12"
+        type: boolean
+        default: false
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  test:
+    name: Test matrix
+    uses: ./.github/workflows/ci_full.yml
+    with:
+      ref: ${{ inputs.tag || github.ref_name }}
+      # a hand-pushed tag has no bump type, so it gets the full matrix
+      full_matrix: ${{ github.event_name == 'push' || inputs.full_matrix }}
+    secrets: inherit   # SNOWFLAKE_URI / REDSHIFT_URI
+    permissions:
+      contents: read
+      id-token: write
+
   build:
     name: Build distributions
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read

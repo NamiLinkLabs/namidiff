@@ -102,3 +102,66 @@ class TestUtils(unittest.TestCase):
             assert False, "KeyError should have been raised"
         except KeyError:
             pass
+
+
+class TestUtilsExtra(unittest.TestCase):
+    def test_join_iter_and_safezip(self):
+        from namidiff.sqeleton.utils import join_iter, safezip
+
+        assert list(join_iter(",", [])) == []
+        assert list(join_iter(",", "ab")) == ["a", ",", "b"]
+        self.assertRaises(ValueError, safezip, [1], [1, 2])
+
+    def test_case_dicts(self):
+        from namidiff.sqeleton.utils import CaseInsensitiveDict, CaseSensitiveDict
+
+        d = CaseInsensitiveDict({"Foo": 1})
+        d["FOO"] = 2
+        assert d.get_key("foo") == "Foo" and d["foo"] == 2
+        assert isinstance(d.new(), CaseInsensitiveDict) and len(d.new()) == 0
+        del d["FOO"]
+        assert len(d) == 0
+
+        s = CaseSensitiveDict({"Foo": 1})
+        ci = s.as_insensitive()
+        assert isinstance(ci, CaseInsensitiveDict) and ci["foo"] == 1
+
+    def test_arith_uuid(self):
+        from uuid import UUID
+        from namidiff.sqeleton.utils import ArithUUID
+
+        u = ArithUUID(int=10)
+        assert int(u) == 10
+        assert (u + 1).int == 11 and (u - 1).int == 9
+        assert u - ArithUUID(int=4) == 6
+        assert u.__add__("x") is NotImplemented
+        assert u.__sub__("x") is NotImplemented
+        assert isinstance(u - UUID(int=1), int)
+
+    def test_arith_alphanumeric(self):
+        from namidiff.sqeleton.utils import ArithAlphanumeric
+
+        a = ArithAlphanumeric("abc")
+        assert repr(a) == 'alphanum"abc"'
+        with self.assertRaises(ValueError):
+            ArithAlphanumeric("abcdef", max_len=3)
+        assert a.__add__("x") is NotImplemented
+        assert a.__sub__("x") is NotImplemented
+        assert a.__ge__(1) is NotImplemented
+        assert a.__lt__(1) is NotImplemented
+        assert a.__eq__(1) is NotImplemented
+        assert a == ArithAlphanumeric("abc") and a != ArithAlphanumeric("abd")
+
+    def test_remove_password_no_password(self):
+        from namidiff.sqeleton.utils import _join_if_any, remove_password_from_url
+
+        assert _join_if_any(",", []) == ""
+        assert remove_password_from_url("mysql://localhost/db") == "mysql://localhost/db"
+
+    def test_unknown(self):
+        from namidiff.sqeleton.utils import Unknown
+
+        assert isinstance(Unknown, Unknown)
+        assert repr(Unknown) == "Unknown"
+        self.assertRaises(RuntimeError, Unknown)
+        self.assertRaises(TypeError, Unknown.__nonzero__, None)

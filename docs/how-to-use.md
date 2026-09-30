@@ -1,6 +1,6 @@
 # User guide
 
-Once you've [installed](https://reladiff.readthedocs.io/en/latest/install.html) Namidiff, you can run it from the command-line, or from Python.
+Once you've [installed](https://namidiff.namilink.com/install.html) Namidiff, you can run it from the command-line, or from Python.
 
 ## How to use from the shell / command-line
 
@@ -18,7 +18,7 @@ When both tables belong to the same database, a shorter syntax is available:
 namidiff  DB_URI  TABLE1_NAME  TABLE2_NAME  [OPTIONS]
 ```
 
-`DB_URL` is either a [database URL](supported-databases.md), or the name of a database definition that is specified in a [configuration file](https://reladiff.readthedocs.io/en/latest/how-to-use.html#how-to-use-with-a-configuration-file). Our database URLs conform to the same format as SQLAlchemy.
+`DB_URL` is either a [database URL](supported-databases.md), or the name of a database definition that is specified in a [configuration file](https://namidiff.namilink.com/how-to-use.html#how-to-use-with-a-configuration-file). Our database URLs conform to the same format as SQLAlchemy.
 
 We recommend using a configuration file, with the ``--conf`` switch, to keep the command simple and manageable.
 
@@ -51,6 +51,13 @@ it's recommended to surround them with quotes.
   - `-w`, `--where` - An additional 'where' expression to restrict the search space.
   - `--allow-empty-tables` - Allows diffing on empty tables. Otherwise, we raise an error.
   - `--case-sensitive` - Column names are treated as case-sensitive. Otherwise, namidiff corrects their case according to schema.
+  - `--empty-string-as-null` - Treat empty strings as NULL when comparing text values, on both databases.
+                               Useful when one database stores `''` and the other stores NULL.
+                               Applies to MySQL, PostgreSQL, Redshift and Snowflake (Oracle already stores `''` as NULL).
+  - `--timestamp-precision` - Compare timestamps at this many fractional digits (1-6), on both databases, regardless of column precision.
+                              Extra digits are truncated. Example: `--timestamp-precision 3` when one side is replicated
+                              at millisecond precision (e.g. AWS DMS). Default: column precision.
+                              Supported by MySQL, PostgreSQL, Redshift, Oracle, Snowflake and DuckDB.
   - `--conf`, `--run` - Specify the run and configuration from a TOML file. (see below)
   - `--bisection-threshold` - Minimal size of segment to be split. Smaller segments will be downloaded and compared locally.
   - `--bisection-factor` - Segments per iteration. When set to 2, it performs binary search.
@@ -143,7 +150,11 @@ for sign, row in diff_tables(table1, table2):
     print(sign, row)
 ```
 
-To learn more about the different options, [read the API reference](https://reladiff.readthedocs.io/en/latest/python-api.html) or run `help(diff_tables)`.
+Both `connect_to_table()` and `diff_tables()` accept `empty_string_as_null=True` and `timestamp_precision=N`,
+matching the `--empty-string-as-null` and `--timestamp-precision` switches. In a configuration file, set them as
+`empty_string_as_null = true` and `timestamp_precision = 3`.
+
+To learn more about the different options, [read the API reference](https://namidiff.namilink.com/python-api.html) or run `help(diff_tables)`.
 
 
 ## Tips

@@ -18,7 +18,10 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(Mixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        if coltype.rounds:
+        # With timestamp_precision set, truncate to it regardless of the column's precision
+        precision = coltype.precision if self.timestamp_precision is None else self.timestamp_precision
+        digits = 6 if self.timestamp_precision is None else self.timestamp_precision
+        if coltype.rounds and self.timestamp_precision is None:
             timestamp = f"{value}::timestamp(6)"
             # Get seconds since epoch. Redshift doesn't support milli- or micro-seconds.
             secs = f"timestamp 'epoch' + round(extract(epoch from {timestamp})::decimal(38)"
@@ -29,12 +32,12 @@ class Mixin_NormalizeValue(Mixin_NormalizeValue):
             # epoch = Total time since epoch in microseconds.
             epoch = f"{secs}*1000000 + {ms}*1000 + {us}"
             timestamp6 = (
-                f"to_char({epoch}, -6+{coltype.precision}) * interval '0.000001 seconds', 'YYYY-mm-dd HH24:MI:SS.US')"
+                f"to_char({epoch}, -6+{precision}) * interval '0.000001 seconds', 'YYYY-mm-dd HH24:MI:SS.US')"
             )
         else:
             timestamp6 = f"to_char({value}::timestamp(6), 'YYYY-mm-dd HH24:MI:SS.US')"
         return (
-            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+coltype.precision}), {TIMESTAMP_PRECISION_POS+6}, '0')"
+            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+precision}), {TIMESTAMP_PRECISION_POS+digits}, '0')"
         )
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:

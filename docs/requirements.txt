@@ -1,9 +1,7 @@
-# https://docs.readthedocs.io/en/stable/guides/specifying-dependencies.html#specifying-a-requirements-file
+sphinx<9  # enum-tools' autoenum is incompatible with Sphinx 9
 sphinx-gallery
 sphinx_markdown_tables
 sphinx-copybutton
 sphinx-rtd-theme
 recommonmark
 enum-tools[sphinx]
-
-namidiff

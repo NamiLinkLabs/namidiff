@@ -38,7 +38,17 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
-        return f"to_char({value}::timestamp(3), 'YYYY-mm-dd HH24:MI:SS.MS')"
+        if self.timestamp_precision is not None:
+            p = self.timestamp_precision
+            return f"LEFT(to_char({value}::timestamp(6), 'YYYY-mm-dd HH24:MI:SS.US'), {TIMESTAMP_PRECISION_POS+p})"
+
+        if coltype.rounds:
+            return f"to_char({value}::timestamp({coltype.precision}), 'YYYY-mm-dd HH24:MI:SS.US')"
+
+        timestamp6 = f"to_char({value}::timestamp(6), 'YYYY-mm-dd HH24:MI:SS.US')"
+        return (
+            f"RPAD(LEFT({timestamp6}, {TIMESTAMP_PRECISION_POS+coltype.precision}), {TIMESTAMP_PRECISION_POS+6}, '0')"
+        )
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         return self.to_string(f"{value}::decimal(38, {coltype.precision})")
@@ -54,6 +64,7 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
 
 class PostgresqlDialect(BaseDialect, Mixin_Schema):
     name = "PostgreSQL"
+    SUPPORTS_TIMESTAMP_PRECISION = True
     ROUNDS_ON_PREC_LOSS = True
     SUPPORTS_PRIMARY_KEY = True
     SUPPORTS_INDEXES = True

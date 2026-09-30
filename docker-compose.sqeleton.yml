@@ -112,24 +112,6 @@ services:
         networks:
             - local
 
-# The vertica docker image is 404
-#    vertica:
-#      container_name: dd-vertica
-#      image: vertica/vertica-ce:12.0.0-0
-#      restart: unless-stopped
-#      volumes:
-#          - vertica-data:/data:delegated
-#      ports:
-#        - '5433:5433'
-#        - '5444:5444'
-#      expose:
-#        - '5433'
-#        - '5444'
-#      env_file:
-#        - dev/dev.env
-#      tty: true
-#      networks:
-#      - local
 
     dremio:
         container_name: dd-dremio
@@ -155,8 +137,6 @@ volumes:
   postgresql-data:
   mysql-data:
   clickhouse-data:
-  # The vertica docker image is 404
-  #vertica-data:
   dremio-data:
   oracle-volume:
 

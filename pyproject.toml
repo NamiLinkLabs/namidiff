@@ -4,7 +4,7 @@ version = "0.6.9"
 description = "Efficiently diff rows across two different databases. Fork of reladiff (itself a fork of data-diff). Python package and CLI are both `namidiff`."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 authors = [
     { name = "NamiLink Kft.", email = "mate@namilink.com" },
     { name = "Erez Shinan", email = "erezshin@gmail.com" },
@@ -18,9 +18,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -41,7 +38,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/NamiLinkLabs/namidiff"
 Repository = "https://github.com/NamiLinkLabs/namidiff"
-Documentation = "https://github.com/NamiLinkLabs/namidiff/tree/main/docs"
+Documentation = "https://namidiff.namilink.com/"
 "Bug Tracker" = "https://github.com/NamiLinkLabs/namidiff/issues"
 "Upstream (reladiff)" = "https://github.com/erezsh/reladiff"
 "Upstream (sqeleton)" = "https://github.com/erezsh/sqeleton"
@@ -55,7 +52,7 @@ mysql = ["mysql-connector-python>=8.0.29"]
 postgresql = ["psycopg2-binary"]
 snowflake = ["snowflake-connector-python>=2.7.2", "cryptography"]
 presto = ["presto-python-client"]
-oracle = ["cx_Oracle"]
+oracle = ["oracledb"]
 # databricks = ["databricks-sql-connector"]
 trino = ["trino>=0.314.0"]
 clickhouse = ["clickhouse-driver"]
@@ -66,12 +63,9 @@ dremio = [
     # Published metadata points at PyPI's sqlalchemy-dremio. For local/dev installs,
     # [tool.uv.sources] below swaps in a fork that fixes datetime[ms] + Python 3.8.
     "sqlalchemy-dremio",
-    "pandas>=2.1; python_version >= '3.9'",
-    "pandas; python_version < '3.9'",
-    "pyarrow>=18.0.0; python_version >= '3.9'",
-    "pyarrow<18.0.0; python_version < '3.9'",
-    "numpy>=1.26.4; python_version >= '3.9'",
-    "numpy>=1.24.4; python_version < '3.9'",
+    "pandas>=2.1",
+    "pyarrow>=18.0.0",
+    "numpy>=1.26.4",
 ]
 all = [
     "mysql-connector-python>=8.0.29",
@@ -79,7 +73,7 @@ all = [
     "snowflake-connector-python>=2.7.2",
     "cryptography",
     "presto-python-client",
-    "cx_Oracle",
+    "oracledb",
     "trino>=0.314.0",
     "clickhouse-driver",
     "vertica-python",
@@ -97,18 +91,17 @@ dev = [
     "cryptography",
     "trino>=0.314.0",
     "presto-python-client",
+    "oracledb",
     "clickhouse-driver",
     "vertica-python",
     "duckdb<1.2",
     # "google-cloud-bigquery",
     # "databricks-sql-connector",
-    "pandas>=2.1; python_version >= '3.9'",
-    "pandas; python_version < '3.9'",
-    "pyarrow>=18.0.0; python_version >= '3.9'",
-    "pyarrow<18.0.0; python_version < '3.9'",
-    "numpy>=1.26.4; python_version >= '3.9'",
-    "numpy>=1.24.4; python_version < '3.9'",
+    "pandas>=2.1",
+    "pyarrow>=18.0.0",
+    "numpy>=1.26.4",
     "sqlalchemy-dremio",
+    "coverage>=7.6.1",
 ]
 
 [tool.uv.sources]
@@ -131,8 +124,38 @@ no_implicit_optional=false
 
 [tool.ruff]
 line-length = 120
-target-version = "py38"
+target-version = "py311"
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py311']
+
+[tool.coverage.run]
+source = ["namidiff"]
+concurrency = ["thread"]
+omit = [
+    # Interactive / TUI tools
+    "namidiff/sqeleton/repl.py",
+    "namidiff/sqeleton/conn_editor.py",
+    "namidiff/sqeleton/__main__.py",
+    # Re-export shims
+    "namidiff/databases/*.py",
+    # Dialects without a local test server
+    "namidiff/sqeleton/databases/snowflake.py",
+    "namidiff/sqeleton/databases/bigquery.py",
+    "namidiff/sqeleton/databases/redshift.py",
+    "namidiff/sqeleton/databases/databricks.py",
+    "namidiff/sqeleton/databases/dremio.py",
+    "namidiff/sqeleton/databases/vertica.py",
+    "namidiff/sqeleton/databases/mssql.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@abstractmethod",
+    "\\.\\.\\.$",
+]

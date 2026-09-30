@@ -12,6 +12,7 @@ from runtype import dataclass
 
 from namidiff.sqeleton.databases import Database, MySQL, BigQuery, Presto, Oracle, Snowflake, DbPath
 from namidiff.sqeleton.abcs import NumericType
+from namidiff.sqeleton.abcs.database_types import TemporalType
 from namidiff.sqeleton.queries import (
     table,
     sum_,
@@ -27,7 +28,7 @@ from namidiff.sqeleton.queries import (
     this,
     Compiler,
 )
-from namidiff.sqeleton.queries.ast_classes import Concat, Count, Expr, Random, TablePath, Code, ITable
+from namidiff.sqeleton.queries.ast_classes import Concat, Count, Expr, Random, TablePath, Code, ITable, IsDistinctFrom
 from namidiff.sqeleton.queries.extras import NormalizeAsString
 
 from .info_tree import InfoTree
@@ -62,13 +63,13 @@ def sample(table_expr):
 
 def create_temp_table(c: Compiler, path: TablePath, expr: Expr) -> str:
     db = c.database
-    c = c.replace(root=False)  # we're compiling fragments, not full queries
+    c = c.replace(_is_root=False)  # we're compiling fragments, not full queries
     if isinstance(db, BigQuery):
         return f"create table {c.compile(path)} OPTIONS(expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 1 DAY)) as {c.compile(expr)}"
     elif isinstance(db, Presto):
         return f"create table {c.compile(path)} as {c.compile(expr)}"
     elif isinstance(db, Oracle):
-        return f"create global temporary table {c.compile(path)} as {c.compile(expr)}"
+        return f"create global temporary table {c.compile(path)} on commit preserve rows as {c.compile(expr)}"
     else:
         return f"create temporary table {c.compile(path)} as {c.compile(expr)}"
 
@@ -314,7 +315,13 @@ class JoinDiffer(TableDiffer):
         a = table1.make_select()
         b = table2.make_select()
 
-        is_diff_cols = {f"is_diff_{c1}": bool_to_int(a[c1].is_distinct_from(b[c2])) for c1, c2 in safezip(cols1, cols2)}
+        def is_distinct(c1, c2):
+            # With timestamp_precision set, compare timestamps at that precision
+            if db.dialect.timestamp_precision is not None and isinstance(table1._schema[c1], TemporalType):
+                return IsDistinctFrom(NormalizeAsString(a[c1]), NormalizeAsString(b[c2]))
+            return a[c1].is_distinct_from(b[c2])
+
+        is_diff_cols = {f"is_diff_{c1}": bool_to_int(is_distinct(c1, c2)) for c1, c2 in safezip(cols1, cols2)}
 
         a_cols = {f"{c}_a": NormalizeAsString(a[c]) for c in cols1}
         b_cols = {f"{c}_b": NormalizeAsString(b[c]) for c in cols2}
@@ -355,9 +362,11 @@ class JoinDiffer(TableDiffer):
             count = yield exclusive_rows.count()
             self.stats["exclusive_count"] = self.stats.get("exclusive_count", 0) + count[0][0]
             sample_rows = yield sample(exclusive_rows.select(*this[list(a_cols)], *this[list(b_cols)]))
-            self.stats["exclusive_sample"] = self.stats.get("exclusive_sample", []) + sample_rows
+            self.stats["exclusive_sample"] = self.stats.get("exclusive_sample", []) + list(sample_rows)
 
             # Only drops if create table succeeded (meaning, the table didn't already exist)
+            if isinstance(db, Oracle):
+                yield exclusive_rows.truncate()  # Oracle can't drop a temporary table that holds rows (ORA-14452)
             yield exclusive_rows.drop()
 
         # Run as a sequence of thread-local queries (compiled into a ThreadLocalInterpreter)

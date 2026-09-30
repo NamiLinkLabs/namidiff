@@ -7,22 +7,21 @@ import pytz
 from namidiff.sqeleton import connect
 from namidiff.sqeleton import databases as dbs
 from namidiff.sqeleton.queries import table, current_timestamp, NormalizeAsString, ForeignKey, Compiler
-from common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
+from .common import str_to_checksum, make_test_each_database_in_list, get_conn, random_table_suffix
 from namidiff.sqeleton.abcs.database_types import TimestampTZ
 from namidiff.sqeleton.abcs.mixins import AbstractMixin_MD5
 
 TEST_DATABASES = {
-    # dbs.MySQL,
-    # dbs.PostgreSQL,
+    dbs.MySQL,
+    dbs.PostgreSQL,
     dbs.Oracle,
-    # dbs.DuckDB,
-    # dbs.Presto,
-    # dbs.Trino,
-    # dbs.Dremio,
-    # dbs.BigQuery,
-    # dbs.Snowflake,
-    # dbs.Redshift,
-    # dbs.Vertica,
+    dbs.Redshift,
+    dbs.Snowflake,
+    dbs.DuckDB,
+    dbs.BigQuery,
+    dbs.Presto,
+    dbs.Trino,
+    dbs.Dremio,
 }
 
 test_each_database: Callable = make_test_each_database_in_list(TEST_DATABASES)

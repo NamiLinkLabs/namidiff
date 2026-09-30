@@ -8,7 +8,7 @@ Namidiff is available on [PyPI](https://pypi.org/project/namidiff/) as **`namidi
 pip install namidiff
 ```
 
-Requirements: Python 3.8+ with pip.
+Requirements: Python 3.11+ with pip.
 
 ## Install with database drivers
 
@@ -52,6 +52,11 @@ Namidiff currently doesn't auto-install the BigQuery drivers.
 For BigQuery, see: [https://pypi.org/project/google-cloud-bigquery](https://pypi.org/project/google-cloud-bigquery)
 
 
+### Notes for Oracle
+
+The `oracle` extra installs [python-oracledb](https://pypi.org/project/oracledb/), which replaces the unmaintained `cx_Oracle`. It works without Oracle client libraries (thin mode). Servers that need thick mode, e.g. ones that enforce Native Network Encryption, also need the Oracle Instant Client: see [Oracle: thin and thick mode](https://namidiff.namilink.com/supported-databases.html#oracle-thin-and-thick-mode).
+
+
 ### Another way to install all the drivers
 
 For your convenience, you may also run these commands one after the other. You may omit drivers that you don't plan to use.
@@ -67,3 +72,5 @@ pip install namidiff[trino]
 pip install namidiff[clickhouse]
 pip install namidiff[vertica]
 ```
+
+> **Note:** Vertica support is unmaintained and untested, since the Vertica Community Edition image is no longer available.

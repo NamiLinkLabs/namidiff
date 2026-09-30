@@ -26,6 +26,7 @@ def connect_to_table(
     key_columns: Union[str, Sequence[str]] = ("id",),
     thread_count: Optional[int] = 1,
     empty_string_as_null: bool = False,
+    timestamp_precision: Optional[int] = None,
     **kwargs,
 ) -> TableSegment:
     """Connects to the given database, and creates a TableSegment instance
@@ -36,6 +37,7 @@ def connect_to_table(
         key_columns: Names of the key columns
         thread_count: Number of threads for this connection (only if using a threadpooled db implementation)
         empty_string_as_null: Treat empty strings as NULL when normalizing text values, on this database instance.
+        timestamp_precision: Normalize timestamps to this many fractional digits (1-6), truncating the rest, on this database instance.
 
     See Also:
         :meth:`connect`
@@ -46,8 +48,15 @@ def connect_to_table(
         db = db_info
         if empty_string_as_null:
             db.enable_empty_string_as_null()
+        if timestamp_precision is not None:
+            db.set_timestamp_precision(timestamp_precision)
     else:
-        db = connect(db_info, thread_count=thread_count, empty_string_as_null=empty_string_as_null)
+        db = connect(
+            db_info,
+            thread_count=thread_count,
+            empty_string_as_null=empty_string_as_null,
+            timestamp_precision=timestamp_precision,
+        )
 
     if isinstance(table_name, str):
         table_name = db.parse_table_name(table_name)
@@ -101,6 +110,8 @@ def diff_tables(
     skip_sort_results: bool = False,
     # Treat empty strings as NULL when normalizing text values, on both databases.
     empty_string_as_null: bool = False,
+    # Normalize timestamps to this many fractional digits (1-6), on both databases.
+    timestamp_precision: Optional[int] = None,
 ) -> DiffResultWrapper:
     """Finds the diff between table1 and table2.
 
@@ -137,6 +148,9 @@ def diff_tables(
         skip_sort_results (bool): Skip sorting the hashdiff output by key for better performance. (used for `HASHDIFF`. default: False)
         empty_string_as_null (bool): Treat empty strings as NULL when normalizing text values, on both databases.
                                      Useful to avoid spurious diffs when one database stores '' and the other stores NULL.
+        timestamp_precision (int, optional): Normalize timestamps to this many fractional digits (1-6), on both databases,
+                                     regardless of column precision; extra digits are truncated. E.g. 3 when one side is replicated at millisecond
+                                     precision (like AWS DMS). Default: column precision.
 
     Note:
         The following parameters are used to override the corresponding attributes of the given :class:`TableSegment` instances:
@@ -185,6 +199,10 @@ def diff_tables(
     if empty_string_as_null:
         for db in dict.fromkeys(t.database for t in segments):
             db.enable_empty_string_as_null()
+
+    if timestamp_precision is not None:
+        for db in dict.fromkeys(t.database for t in segments):
+            db.set_timestamp_precision(timestamp_precision)
 
     algorithm = Algorithm(algorithm)
     if algorithm == Algorithm.AUTO:

@@ -33,6 +33,7 @@ namidiff/          # Top-level Python package (public API + CLI)
     redshift.py
     clickhouse.py
     trino.py / presto.py / vertica.py / databricks.py / dremio.py
+    # vertica.py is unmaintained: Vertica CE image is gone, so no tests/CI/docker service
 
 tests/             # unittest-based test suite
   common.py        # DB connection strings + shared helpers
@@ -84,6 +85,8 @@ normalize_value_by_type(value, coltype)
 
 To fix cross-database string comparison bugs (e.g. MySQL `''` vs Snowflake `NULL`): override `normalize_text()` in the database's `Mixin_NormalizeValue`. MySQL's override emits `NULLIF(cast({value} as char), '')` so that empty strings hash identically to NULLs on the other side.
 
+Timestamps are normalized to the column precision, padded to 6 digits. `timestamp_precision` (dialect attribute, set per connection via `Database.set_timestamp_precision()` / `diff_tables(timestamp_precision=...)` / `--timestamp-precision`) instead truncates to N digits and emits N digits, e.g. 3 for AWS DMS replicas. Supported by dialects with `SUPPORTS_TIMESTAMP_PRECISION = True` (MySQL, PostgreSQL, Redshift, Oracle, Snowflake, DuckDB).
+
 ## Running tests
 
 ```bash
@@ -115,3 +118,4 @@ Entry point: `namidiff.__main__:main` (Click-based).
 - Format with `black -l 120`.
 - No type annotations required but preferred for new public API.
 - Queries are built via the compiler (`namidiff/sqeleton/abcs/compiler.py`) — avoid raw f-string SQL except inside dialect methods.
+Read HANDOFF.md if present before continue

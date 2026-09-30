@@ -37,14 +37,19 @@ class Mixin_MD5(AbstractMixin_MD5):
 
 class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_timestamp(self, value: str, coltype: TemporalType) -> str:
+        if self.timestamp_precision is not None:
+            s = self.to_string(f"cast({value} as datetime(6))")
+            return f"LEFT({s}, {TIMESTAMP_PRECISION_POS + self.timestamp_precision})"
+
+        if coltype.rounds:
+            return self.to_string(f"cast( cast({value} as datetime({coltype.precision})) as datetime(6))")
+
         s = self.to_string(f"cast({value} as datetime(6))")
-        return f"LEFT({s}, {TIMESTAMP_PRECISION_POS + 3})"
+        return f"RPAD(RPAD({s}, {TIMESTAMP_PRECISION_POS+coltype.precision}, '.'), {TIMESTAMP_PRECISION_POS+6}, '0')"
 
     def normalize_number(self, value: str, coltype: FractionalType) -> str:
         if isinstance(coltype, Float):
-            if coltype.rounds:
-                return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
-            return self.to_string(f"cast(truncate({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
+            return self.to_string(f"cast(round({value}, {coltype.precision}) as decimal(38, {coltype.precision}))")
         return self.to_string(f"cast({value} as decimal(38, {coltype.precision}))")
 
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:
@@ -63,6 +68,7 @@ class Mixin_Regex(AbstractMixin_Regex):
 
 class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
     name = "MySQL"
+    SUPPORTS_TIMESTAMP_PRECISION = True
     ROUNDS_ON_PREC_LOSS = True
     SUPPORTS_PRIMARY_KEY = True
     SUPPORTS_INDEXES = True
@@ -93,7 +99,7 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         # Boolean
         "boolean": Boolean,
     }
-    MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample}
+    MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample, Mixin_Regex}
 
     def quote(self, s: str):
         return f"`{s}`"
