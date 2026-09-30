@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.12
 RUN apt-get update && apt-get install -y \
     python3-dev libpq-dev wget unzip \
     python3-setuptools gcc bc

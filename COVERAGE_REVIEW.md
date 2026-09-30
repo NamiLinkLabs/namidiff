@@ -122,3 +122,30 @@ coverage run -m unittest discover -s . -p "test_*.py" && coverage report
 - `docker-compose.yml`: added a Presto `healthcheck` that runs the bundled `presto --execute "SELECT 1"` (the image removes `curl`). Without it, `--wait` can't tell when Presto has finished starting. Verified: `docker compose up -d --wait presto` → healthy.
 - Verified locally with the exact `ci.yml` command (`TEST_ACROSS_ALL_DBS=0 unittest-parallel -j 4` with Trino, ClickHouse and Presto): OK. That run was against the reset `mysql:8.4` volume, so the local volume reset from item 7 is done.
 - ClickHouse is still commented out in `ci_full.yml` (CI-COVER-DATABASES) but runs in `ci.yml`. Not changed.
+
+## Session 3 (2026-09-23): Python 3.13/3.14, oracledb, release-gated CI
+
+Pushed to `fix-unit-tests` in `5064882` (oracledb + 3.14 fix + docs), `3beed0e` (Trino memory) and `32d23f4` (CI + Oracle tests).
+
+1. **cx_Oracle → python-oracledb** (`sqeleton/databases/oracle.py`; `pyproject.toml` `oracle`/`all` extras; `oracledb` added to the dev group). `cx_Oracle` does not install on 3.12+. It was never in the dev group, so CI never installed it. Reference: downstream pde-dq `66f872a`, which aliases `oracledb` as `cx_Oracle`. Here we import `oracledb` directly.
+2. **Oracle thick mode is opt-in**: the URI/TOML param `thick_mode=true`, or `lib_dir=<Instant Client dir>` (which implies thick). It is process-wide. If the client libraries fail to load, it **raises `ConnectError`** instead of pde-dq's "warn and stay thin", since thick was requested explicitly. Docs: `supported-databases.md` → "Oracle: thin and thick mode" (download, architecture, `lib_dir`, TOML/URI, Linux/Windows/macOS), and a note in `install.md`.
+3. **Python 3.14 bug fixed** (`namidiff/thread_utils.py`): 3.14 moved `_WorkItem.kwargs` into `_WorkItem.task`. Every hashdiff failed with `'_WorkItem' object has no attribute 'kwargs'`. Now reads either layout. It still depends on stdlib internals.
+4. **Trino OOM on long local sessions fixed** (`dev/trino-conf/etc/config.properties`): Trino keeps finished queries on the heap for `query.min-expire-age` (default 15m), and a test run sends thousands, so back-to-back runs filled the 1G heap. Set to `1m`. Heap and `-j 4` unchanged.
+5. **CI**:
+   - `ci.yml` (CI-COVER-VERSIONS): matrix now 3.8–3.14 on every push/PR.
+   - `ci_full.yml` (CI-COVER-DATABASES): PRs run **3.12** only; manual runs and releases run 3.8–3.14. Added a `workflow_call` trigger with a `ref` input.
+   - `release.yml`: new `test` job calls `ci_full.yml` on the release tag; `build` needs it, so nothing is published unless the full matrix passes. `secrets: inherit` in `release.yml` and `bump-version.yml` so Snowflake/Redshift tests don't get skipped.
+6. **Tests**: `tests/tests_sqeleton/test_oracle.py` (thin/thick switch, mocked oracledb).
+
+Verified locally, all dbs incl. Oracle (thin), `-j 4`:
+- 3.14: 913 OK. 3.12: 913 OK. 3.13: 913; 7 Trino errors from the Trino OOM (item 4), which pass on rerun.
+- After the Trino fix: 3 back-to-back full runs on 3.14, same container, 913 OK each, no Trino restart, memory flat between runs 2 and 3.
+- Thick mode: dd-oracle with Instant Client 23.3 arm64 (`~/oracle/lib`), URI and dict config.
+- Workflows: GitHub workflow schema check OK. actionlint only flags the pre-existing `checkout@v3` / `setup-python@v3`.
+- Local uve envs: `reladiff313`, `reladiff314` created. `reladiff` re-synced (cx_Oracle removed).
+
+Open:
+- E: Oracle is not in CI (no `ORACLE_URI`, no `oracle` service). The gvenzl image is ~1.5 GB. Add it if you want the driver covered in CI.
+- G: 3.13/3.14 (and 3.8 on `ubuntu-latest` = 24.04) have not run on GitHub yet with `setup-python@v3`. If setup fails: bump to `setup-python@v5`, or pin `ubuntu-22.04` for 3.8. Check the manual CI-COVER-DATABASES run.
+- H: `bump-version.yml` pushes the tag before the tests run. A failed release leaves a tag with nothing published; delete the tag and re-release after fixing.
+- I: `ci.yml` still runs 7 jobs per push. Could limit PRs to fewer versions the same way as `ci_full.yml`.

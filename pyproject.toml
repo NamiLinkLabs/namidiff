@@ -4,7 +4,7 @@ version = "0.6.9"
 description = "Efficiently diff rows across two different databases. Fork of reladiff (itself a fork of data-diff). Python package and CLI are both `namidiff`."
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 authors = [
     { name = "NamiLink Kft.", email = "mate@namilink.com" },
     { name = "Erez Shinan", email = "erezshin@gmail.com" },
@@ -18,9 +18,6 @@ classifiers = [
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -66,12 +63,9 @@ dremio = [
     # Published metadata points at PyPI's sqlalchemy-dremio. For local/dev installs,
     # [tool.uv.sources] below swaps in a fork that fixes datetime[ms] + Python 3.8.
     "sqlalchemy-dremio",
-    "pandas>=2.1; python_version >= '3.9'",
-    "pandas; python_version < '3.9'",
-    "pyarrow>=18.0.0; python_version >= '3.9'",
-    "pyarrow<18.0.0; python_version < '3.9'",
-    "numpy>=1.26.4; python_version >= '3.9'",
-    "numpy>=1.24.4; python_version < '3.9'",
+    "pandas>=2.1",
+    "pyarrow>=18.0.0",
+    "numpy>=1.26.4",
 ]
 all = [
     "mysql-connector-python>=8.0.29",
@@ -103,12 +97,9 @@ dev = [
     "duckdb<1.2",
     # "google-cloud-bigquery",
     # "databricks-sql-connector",
-    "pandas>=2.1; python_version >= '3.9'",
-    "pandas; python_version < '3.9'",
-    "pyarrow>=18.0.0; python_version >= '3.9'",
-    "pyarrow<18.0.0; python_version < '3.9'",
-    "numpy>=1.26.4; python_version >= '3.9'",
-    "numpy>=1.24.4; python_version < '3.9'",
+    "pandas>=2.1",
+    "pyarrow>=18.0.0",
+    "numpy>=1.26.4",
     "sqlalchemy-dremio",
     "coverage>=7.6.1",
 ]
@@ -133,11 +124,11 @@ no_implicit_optional=false
 
 [tool.ruff]
 line-length = 120
-target-version = "py38"
+target-version = "py311"
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py311']
 
 [tool.coverage.run]
 source = ["namidiff"]

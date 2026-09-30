@@ -8,7 +8,7 @@ Namidiff is available on [PyPI](https://pypi.org/project/namidiff/) as **`namidi
 pip install namidiff
 ```
 
-Requirements: Python 3.8+ with pip.
+Requirements: Python 3.11+ with pip.
 
 ## Install with database drivers
 

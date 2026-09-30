@@ -18,13 +18,22 @@ on:
 
     branches: [ main ]
   workflow_dispatch:
-  # Called by release.yml: every release runs the full Python matrix before publishing
+    inputs:
+      full_matrix:
+        description: "Test Python 3.11-3.14 instead of only 3.12"
+        type: boolean
+        default: false
+  # Called by release.yml before publishing; full_matrix only for major/explicit releases
   workflow_call:
     inputs:
       ref:
         description: "Git ref to test (default: the triggering commit)"
         type: string
         default: ''
+      full_matrix:
+        description: "Test Python 3.11-3.14 instead of only 3.12"
+        type: boolean
+        default: false
 
 permissions:
   id-token: write # This is required for requesting the JWT
@@ -36,8 +45,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        # PRs test one version to save compute; releases and manual runs test all of them
-        python-version: ${{ fromJSON(github.event_name == 'pull_request' && '["3.12"]' || '["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]') }}
+        # Only 3.12 by default (PRs, patch/minor releases); full_matrix tests every supported version
+        python-version: ${{ fromJSON(inputs.full_matrix && '["3.11", "3.12", "3.13", "3.14"]' || '["3.12"]') }}
 
     name: Check Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

@@ -56,7 +56,7 @@ Namidiff is available on [PyPI](https://pypi.org/project/namidiff/) as **`namidi
 pip install namidiff
 ```
 
-Requires Python 3.8+ with pip.
+Requires Python 3.11+ with pip.
 
 We advise to install it within a virtual-env.
 
