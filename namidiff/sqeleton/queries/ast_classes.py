@@ -1,5 +1,6 @@
 from dataclasses import field
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Generator, List, Optional, Sequence, Union, Dict, Literal, overload
 from collections import ChainMap
 from functools import lru_cache
@@ -63,7 +64,7 @@ class ExprNode(CompilableNode):
 
 
 # Query expressions can only interact with objects that are an instance of 'Expr'
-Expr = Union[ExprNode, str, bytes, bool, int, float, datetime, ArithString, None, dict, list]
+Expr = Union[ExprNode, str, bytes, bool, int, float, Decimal, datetime, ArithString, None, dict, list]
 
 
 @dataclass

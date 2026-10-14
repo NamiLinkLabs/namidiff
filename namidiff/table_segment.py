@@ -316,6 +316,9 @@ class TableSegment:
             raise RuntimeError("Cannot approximate the size of an unbounded segment. Must have min_key and max_key.")
         diff = self.max_key - self.min_key
         assert all(d > 0 for d in diff)
+        if not all(isinstance(d, int) for d in diff):
+            # A fractional key range says nothing about the row count, so count the rows
+            return self.count()
         return int_product(diff)
 
     @property

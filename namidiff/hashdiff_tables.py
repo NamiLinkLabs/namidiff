@@ -283,7 +283,8 @@ class HashDiffer(TableDiffer):
                         if r2[:n_keys] == key and s2 == other_sign:
                             pair.append((s2, r2))
                             break
-                    logger.info(". " * level + f"  sample pk={key}: " + " | ".join(f"{s} {r[n_keys:]}" for s, r in pair))
+                    # Row values are table data: DEBUG only
+                    logger.debug(". " * level + f"  sample pk={key}: " + " | ".join(f"{s} {r[n_keys:]}" for s, r in pair))
                 if len(seen_keys) >= 2:
                     break
             self.stats["rows_downloaded"] = self.stats.get("rows_downloaded", 0) + max(len(rows1), len(rows2))
