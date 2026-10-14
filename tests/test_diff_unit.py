@@ -47,7 +47,22 @@ class TestHashDiffer(DuckDBTestCase):
         "hd_empty": ("id INTEGER, s VARCHAR", []),
         "hd_big1": ("id INTEGER, s VARCHAR", [(i, f"s{i}") for i in range(20)]),
         "hd_big2": ("id INTEGER, s VARCHAR", [(i, f"s{i}") for i in range(20) if i != 7]),
+        "hd_dec1": ("id DECIMAL(10,2), s VARCHAR", [(i / 4, f"s{i}") for i in range(1, 200)]),
+        "hd_dec2": ("id DECIMAL(10,2), s VARCHAR", [(i / 4, f"s{i}") for i in range(1, 200) if i != 77]),
     }
+
+    def test_fractional_key(self):
+        # Decimal keys with a scale used to crash split_space (range() takes ints only)
+        differ = HashDiffer(bisection_threshold=8, bisection_factor=4)
+        diff = list(differ.diff_tables(self.seg("hd_dec1", "s"), self.seg("hd_dec2", "s")))
+        assert diff == [("-", ("19.25", "s77"))], diff
+
+    def test_sample_rows_logged_at_debug_only(self):
+        t1, t2 = self.seg("hd_d", "s"), self.seg("hd_e", "s")
+        with self.assertLogs("hashdiff_tables", level="DEBUG") as logs:
+            list(HashDiffer().diff_tables(t1, t2))
+        samples = [r for r in logs.records if "sample pk=" in r.getMessage()]
+        assert samples and all(r.levelname == "DEBUG" for r in samples), logs.output
 
     def test_param_validation(self):
         self.assertRaisesRegex(

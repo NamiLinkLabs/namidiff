@@ -288,8 +288,12 @@ def number_to_human(n):
     return "{:.0f}{}".format(n / 10 ** (3 * millidx), millnames[millidx])
 
 
-def split_space(start, end, count) -> List[int]:
+def split_space(start, end, count) -> list:
     size = end - start
+    if not (isinstance(start, int) and isinstance(end, int)):
+        # Fractional keys (Decimal/float): evenly spaced points; range() only takes ints
+        step = size / (count + 1)
+        return [start + step * i for i in range(1, count + 1)]
     assert count <= size, (count, size)
     return list(range(start, end, (size + 1) // (count + 1)))[1 : count + 1]
 
