@@ -50,7 +50,9 @@ def _get_schema(pair):
 
 def diff_schemas(table1, table2, schema1, schema2, columns):
     logging.info("Diffing schemas...")
-    attrs = "name", "type", "datetime_precision", "numeric_precision", "numeric_scale"
+    # Rows are (name, type, datetime_precision, numeric_precision, numeric_scale), plus the collation on MySQL.
+    # Both tables are on the same database here, so zip() just stops at whatever the dialect reports.
+    attrs = "name", "type", "datetime_precision", "numeric_precision", "numeric_scale", "collation"
     for c in columns:
         if c is None:  # Skip for convenience
             continue
@@ -66,7 +68,7 @@ def diff_schemas(table1, table2, schema1, schema2, columns):
         col1 = schema1[c]
         col2 = schema2[c]
 
-        for attr, v1, v2 in safezip(attrs, col1, col2):
+        for attr, v1, v2 in zip(attrs, col1, col2):
             if v1 != v2:
                 diffs.append(f"{attr}:({v1} != {v2})")
         if diffs:

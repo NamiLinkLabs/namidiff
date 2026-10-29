@@ -6,7 +6,22 @@ from runtype import dataclass
 from ..abcs.database_types import ColType, Native_UUID
 
 from .compiler import Compiler, md
-from .ast_classes import Expr, ExprNode, Concat, Code
+from .ast_classes import Expr, ExprNode, Concat, Code, LazyOps
+
+
+@dataclass(eq=False, order=False)
+class CollatedKey(ExprNode, LazyOps):
+    """A key column, compiled through the dialect's ``collate_key()``, so that the database compares and
+    orders it the way namidiff orders the key's Python values (binary order for strings).
+
+    Wrap key columns in it wherever their order matters: range predicates, and ``min()``/``max()``.
+    """
+
+    expr: ExprNode
+
+    @property
+    def type(self):
+        return self.expr.type
 
 
 
@@ -37,6 +52,10 @@ class Checksum(ExprNode):
 
 
 class Compiler(Compiler):
+    @md
+    def compile_node(c: Compiler, n: CollatedKey) -> str:
+        return c.dialect.collate_key(c.compile(n.expr), n.expr.type)
+
     @md
     def compile_node(c: Compiler, n: NormalizeAsString) -> str:
         expr = c.compile(n.expr)

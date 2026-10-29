@@ -22,4 +22,4 @@ from .api import (
     code,
 )
 from .ast_classes import Expr, ExprNode, Select, Count, BinOp, Explain, In, Code, Column, ITable, ForeignKey
-from .extras import Checksum, NormalizeAsString, ApplyFuncAndNormalizeAsString
+from .extras import Checksum, NormalizeAsString, ApplyFuncAndNormalizeAsString, CollatedKey

@@ -203,6 +203,17 @@ class TestCLIHelpers(unittest.TestCase):
             "nested": {"password": "**", "other": 1},
         }
 
+    def test_diff_schemas_extra_attributes(self):
+        "MySQL schema rows also carry the collation; other dialects stop at numeric_scale"
+        s1 = {"id": ("id", "varchar", None, None, None, "utf8mb4_bin")}
+        s2 = {"id": ("id", "varchar", None, None, None, "utf8mb4_0900_ai_ci")}
+        with self.assertLogs(level="WARNING") as cm:
+            diff_schemas("t1", "t2", s1, s2, ("id",))
+        assert any("collation:(utf8mb4_bin != utf8mb4_0900_ai_ci)" in m for m in cm.output), cm.output
+        with self.assertNoLogs(level="WARNING"):
+            diff_schemas("t1", "t2", s1, s1, ("id",))
+            diff_schemas("t1", "t2", {"id": ("id", "int", None, 10, 0)}, {"id": ("id", "int", None, 10, 0)}, ("id",))
+
     def test_diff_schemas_missing_column(self):
         s1 = {"id": ("id", "int", None, None, None)}
         s2 = {"id": ("id", "int", None, None, None), "b": ("b", "int", None, None, None)}

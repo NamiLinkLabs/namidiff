@@ -64,6 +64,7 @@ docker-compose.yml # Spins up MySQL, Postgres, Presto, Clickhouse, etc.
    - `class Mixin_MD5(AbstractMixin_MD5)` — `md5_as_int()`.
    - `class Mixin_NormalizeValue(AbstractMixin_NormalizeValue)` — `normalize_timestamp()`, `normalize_number()`. Override `normalize_text()` if the database treats empty string and NULL differently (see MySQL for an example).
    - `class TheDB(ThreadedDatabase)` — set `dialect`, `SUPPORTS_ALPHANUMS`, `CONNECT_URI_HELP`, `CONNECT_URI_PARAMS`. Implement `create_connection()`.
+   - `SUPPORTS_ALPHANUMS = True` is only correct if the database orders strings by code point (like Python). If it orders by a collation (MySQL), report the column collation from `select_table_schema()`/`parse_type()` (`StringType.collation`) and override `Dialect.collate_key()` to force a binary order for string keys (see MySQL).
 3. Add an entry to `namidiff/sqeleton/databases/_connect.py`'s scheme-to-class map.
 4. Create a matching thin shim in `namidiff/databases/<dbname>.py` that re-exports from `namidiff.sqeleton`.
 5. Add optional dependency in `pyproject.toml` and to the relevant extras.
@@ -84,6 +85,10 @@ normalize_value_by_type(value, coltype)
 ```
 
 To fix cross-database string comparison bugs (e.g. MySQL `''` vs Snowflake `NULL`): override `normalize_text()` in the database's `Mixin_NormalizeValue`. MySQL's override emits `NULLIF(cast({value} as char), '')` so that empty strings hash identically to NULLs on the other side.
+
+### Key ordering (string keys)
+
+HASHDIFF splits the key range on the Python side and sends `min(key)`, `max(key)` and `key >= a AND key < b` to both databases, so the database must order keys the way Python orders the values namidiff generates: numerically, or by code point for strings (`ArithAlphanumeric` compares `str`s; the alphabet is ` -.0-9A-Z_a-z`). `TableSegment` wraps every key column in `CollatedKey` (`sqeleton/queries/extras.py`), which compiles through `Dialect.collate_key(value, coltype)`. The default returns the column unchanged. MySQL orders strings by the column collation, so its `select_table_schema()` also fetches `collation_name`, `parse_type()` keeps it on `StringType.collation`, `_refine_coltypes()` carries it over to `String_VaryingAlphanum`, and `collate_key()` emits `cast(key as binary)` unless the collation is already binary (`*_bin`, `binary`). UUID keys are not touched: they compare numerically, and hex digits order the same under case-insensitive collations. See `docs/supported-databases.md` for the user-facing notes (index use, functional index).
 
 Timestamps are normalized to the column precision, padded to 6 digits. `timestamp_precision` (dialect attribute, set per connection via `Database.set_timestamp_precision()` / `diff_tables(timestamp_precision=...)` / `--timestamp-precision`) instead truncates to N digits and emits N digits, e.g. 3 for AWS DMS replicas. Supported by dialects with `SUPPORTS_TIMESTAMP_PRECISION = True` (MySQL, PostgreSQL, Redshift, Oracle, Snowflake, DuckDB).
 

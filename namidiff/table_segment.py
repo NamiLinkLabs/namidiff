@@ -11,7 +11,7 @@ from namidiff.sqeleton.databases import Database, DbPath, DbKey, DbTime
 from namidiff.sqeleton.abcs.database_types import String_UUID, Text
 from namidiff.sqeleton.schema import Schema, create_schema
 from namidiff.sqeleton.queries import Count, Checksum, SKIP, table, this, Expr, min_, max_, Code
-from namidiff.sqeleton.queries.extras import ApplyFuncAndNormalizeAsString, NormalizeAsString, Md5AsString
+from namidiff.sqeleton.queries.extras import ApplyFuncAndNormalizeAsString, NormalizeAsString, Md5AsString, CollatedKey
 
 logger = logging.getLogger("table_segment")
 
@@ -180,15 +180,19 @@ class TableSegment:
             return str(value)
         return value
 
+    def _key_expr(self, k: str) -> CollatedKey:
+        """The key column, ordered by the database the way Python orders its values (see Dialect.collate_key)."""
+        return CollatedKey(this[k])
+
     def _make_key_range(self):
         if self.min_key is not None:
             for mn, k in safezip(self.min_key, self.key_columns):
                 mn = self._cast_col_value(k, mn)
-                yield mn <= this[k]
+                yield mn <= self._key_expr(k)
         if self.max_key is not None:
             for k, mx in safezip(self.key_columns, self.max_key):
                 mx = self._cast_col_value(k, mx)
-                yield this[k] < mx
+                yield self._key_expr(k) < mx
 
     def _make_update_range(self):
         if self.min_update is not None:
@@ -291,7 +295,7 @@ class TableSegment:
         """Query database for minimum and maximum key. This is used for setting the initial bounds."""
         # Normalizes the result (needed for UUIDs) after the min/max computation
         select = self.make_select().select(
-            ApplyFuncAndNormalizeAsString(this[k], f) for k in self.key_columns for f in (min_, max_)
+            ApplyFuncAndNormalizeAsString(self._key_expr(k), f) for k in self.key_columns for f in (min_, max_)
         )
         result = tuple(self.database.query(select, tuple))
 

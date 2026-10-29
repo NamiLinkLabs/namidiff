@@ -249,7 +249,18 @@ class ArithAlphanumeric(ArithString):
         assert isinstance(other, ArithAlphanumeric)
         n1, n2 = alphanums_to_numbers(self._str, other._str)
         split = split_space(n1, n2, count)
-        return [self.new(numberToAlphanum(s)) for s in split]
+        checkpoints = [numberToAlphanum(s) for s in split]
+
+        # Space is digit 0, so a checkpoint may end in spaces. Databases with PAD SPACE collations
+        # (MySQL's utf8mb4_bin, latin1_bin, ...) compare 'M ' equal to 'M', while Python (and NO PAD databases)
+        # put 'M' before 'M '. Such a checkpoint would put the key 'M' in different segments on the two sides.
+        # Drop the trailing spaces whenever the checkpoints stay strictly ordered within (self, other).
+        stripped = [c.rstrip(" ") for c in checkpoints]
+        bounds = [self._str, *stripped, other._str]
+        if all(a < b for a, b in zip(bounds, bounds[1:])):
+            checkpoints = stripped
+
+        return [self.new(c) for c in checkpoints]
 
     def __sub__(self, other: "Union[ArithAlphanumeric, int]") -> float:
         if isinstance(other, ArithAlphanumeric):

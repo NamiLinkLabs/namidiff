@@ -3,15 +3,27 @@ from typing import Callable
 import uuid
 import unittest
 
+from parameterized import parameterized
+
+from namidiff.sqeleton.abcs.database_types import String_VaryingAlphanum
 from namidiff.sqeleton.queries import table, this, commit
 from namidiff.sqeleton.utils import ArithAlphanumeric, numberToAlphanum
 
 from namidiff.hashdiff_tables import HashDiffer, compare_element, diff_sets
 from namidiff.joindiff_tables import JoinDiffer
+from namidiff.query_utils import drop_table
 from namidiff.table_segment import TableSegment, split_space, Vector
 from namidiff import databases as db
 
-from .common import str_to_checksum, test_each_database_in_list, DiffTestCase, table_segment
+from .common import (
+    str_to_checksum,
+    test_each_database_in_list,
+    DiffTestCase,
+    table_segment,
+    CONN_STRINGS,
+    get_conn,
+    random_table_suffix,
+)
 
 
 TEST_DATABASES = {
@@ -391,7 +403,7 @@ class TestUUIDs(DiffTestCase):
         self.assertRaises(ValueError, list, differ.diff_tables(a_empty, self.b))
 
 
-@test_each_database_in_list(TEST_DATABASES - {db.MySQL})
+@test_each_database
 class TestAlphanumericKeys(DiffTestCase):
     src_schema = {"id": str, "text_comment": str}
 
@@ -436,7 +448,7 @@ class TestAlphanumericKeys(DiffTestCase):
         self.assertRaises(NotImplementedError, list, differ.diff_tables(self.a, self.b))
 
 
-@test_each_database_in_list(TEST_DATABASES - {db.MySQL})
+@test_each_database
 class TestVaryingAlphanumericKeys(DiffTestCase):
     src_schema = {"id": str, "text_comment": str}
 
@@ -1032,6 +1044,94 @@ class TestCompoundKeySimple3(DiffTestCase):
         bb = TableSegment(self.connection, self.dst_table.path, ("id", "id2"))
         diff = set(differ.diff_tables(aa, bb))
         self.assertEqual(diff, expected)
+
+
+# Alphanumeric keys whose code point order differs from MySQL's case-insensitive collations:
+# in binary order 'B' < 'Z9' < '_x' < 'a1', in utf8mb4_0900_ai_ci '_x' < 'a1' < 'B' < 'Z9'.
+# No two keys are equal under a case-insensitive collation, so they fit a PRIMARY KEY of any collation.
+# fmt: off
+MIXED_CASE_KEYS = [
+    "B", "a1", "C", "b2", "Z9", "z10", "_x", "A_", "0a", "9Z", "Ab", "aC", "M", "M-", "M.", "m0",
+    "Q1", "q2", "R", "r3", "S2x", "s2Y", "T_", "t_1", "U", "u4", "Vv", "vW", "W9", "w8", "X", "x5", "Y.", "y6",
+]
+# fmt: on
+MIXED_CASE_ROWS = [(k, f"value of {k}") for k in MIXED_CASE_KEYS]
+# The second table lacks 'Vv' and has another value for 'aC'
+MIXED_CASE_ROWS_CHANGED = [(k, "CHANGED" if k == "aC" else v) for k, v in MIXED_CASE_ROWS if k != "Vv"]
+MIXED_CASE_DIFF = [("+", ("aC", "CHANGED")), ("-", ("Vv", "value of Vv")), ("-", ("aC", "value of aC"))]
+
+MYSQL_STRING_KEY_TYPES = [
+    "VARCHAR(16) COLLATE utf8mb4_0900_ai_ci",  # MySQL 8 default
+    "VARCHAR(16) COLLATE utf8mb4_general_ci",  # MySQL 5.7 default
+    "VARCHAR(16) COLLATE utf8mb4_0900_as_cs",
+    "VARCHAR(16) COLLATE utf8mb4_bin",
+    "VARCHAR(16) COLLATE utf8mb4_0900_bin",
+    "VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci",
+    "VARCHAR(16) CHARACTER SET utf16 COLLATE utf16_general_ci",  # code units are not bytes
+    "VARBINARY(16)",
+]
+
+
+@test_each_database_in_list({db.MySQL})
+class TestMySQLStringKeyCollations(DiffTestCase):
+    """String keys on MySQL, whose collations don't order strings the way Python does (erezsh/sqeleton#22).
+
+    Bisection is forced with a tiny bisection_threshold, so the key range predicates are what gets tested.
+    """
+
+    def _create_tables(self, key_type):
+        for name, rows in [(self.table_src_name, MIXED_CASE_ROWS), (self.table_dst_name, MIXED_CASE_ROWS_CHANGED)]:
+            self.connection.query(f"CREATE TABLE {name} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+            self.connection.query([table(self.connection.parse_table_name(name)).insert_rows(rows), commit])
+
+    @parameterized.expand([(t,) for t in MYSQL_STRING_KEY_TYPES])
+    def test_string_key(self, key_type):
+        self._create_tables(key_type)
+        a = TableSegment(self.connection, self.table_src_path, ("id",), extra_columns=("v",))
+        b = TableSegment(self.connection, self.table_dst_path, ("id",), extra_columns=("v",))
+
+        collation = key_type.split("COLLATE ")[1] if "COLLATE" in key_type else "binary"
+        self.assertEqual(a.with_schema()._schema["id"], String_VaryingAlphanum(collation=collation))
+
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        self.assertEqual(list(differ.diff_tables(a, a)), [])
+
+
+@unittest.skipUnless(db.MySQL in CONN_STRINGS, "Requires MySQL")
+class TestMySQLStringKeysAcrossDatabases(unittest.TestCase):
+    """MySQL (collation order) against DuckDB (code point order, like Snowflake or BigQuery).
+
+    Both sides must put each key in the same segment, or rows get reported missing on one side and extra on the other.
+    """
+
+    def setUp(self):
+        self.mysql = get_conn(db.MySQL)
+        self.duckdb = get_conn(db.DuckDB)
+        suffix = random_table_suffix()
+        self.mysql_path = self.mysql.parse_table_name(f"src{suffix}")
+        self.duckdb_path = self.duckdb.parse_table_name(f"dst{suffix}")
+        drop_table(self.mysql, self.mysql_path)
+        drop_table(self.duckdb, self.duckdb_path)
+
+        self.mysql.query(
+            f"CREATE TABLE src{suffix} (id VARCHAR(16) COLLATE utf8mb4_0900_ai_ci PRIMARY KEY, v VARCHAR(64))"
+        )
+        self.mysql.query([table(self.mysql_path).insert_rows(MIXED_CASE_ROWS), commit])
+        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
+        self.duckdb.query([table(self.duckdb_path).insert_rows(MIXED_CASE_ROWS_CHANGED), commit])
+
+    def tearDown(self):
+        drop_table(self.mysql, self.mysql_path)
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def test_diff(self):
+        a = TableSegment(self.mysql, self.mysql_path, ("id",), extra_columns=("v",))
+        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",))
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        flipped = sorted(("-" if sign == "+" else "+", row) for sign, row in MIXED_CASE_DIFF)
+        self.assertEqual(sorted(differ.diff_tables(b, a)), flipped)
 
 
 @test_each_database

@@ -52,6 +52,29 @@ namidiff cannot switch to `SHA2()` instead: row checksums must match the `MD5()`
 
 See the [MySQL Legacy Hashing Component docs](https://dev.mysql.com/doc/refman/9.7/en/legacy-hashing-component.html).
 
+### MySQL: string (varchar) key columns and collations
+
+HASHDIFF splits the key range into segments on the namidiff side, then asks each database for `min(key)`, `max(key)` and `key >= a AND key < b`. That only works when both databases order keys the same way namidiff does. For numbers that is a given. For strings, namidiff and most databases (Snowflake, BigQuery, DuckDB, Redshift, PostgreSQL in the `C` locale) compare by code point: `'B' < 'Z9' < '_x' < 'a1'`. MySQL compares by the column's collation, and the defaults are case-insensitive: under `utf8mb4_0900_ai_ci` (MySQL 8), `utf8mb4_general_ci` (MySQL 5.7) or `latin1_swedish_ci` the same keys order as `'_x' < 'a1' < 'B' < 'Z9'`. The segments then contain different rows on the two sides, and the diff reports rows as missing or extra that are not, or fails with `min_key expected to be smaller than max_key`. This is why MySQL used to refuse string keys altogether (`SUPPORTS_ALPHANUMS = False`, see [erezsh/sqeleton#22](https://github.com/erezsh/sqeleton/issues/22)).
+
+namidiff reads each column's collation from `information_schema` and handles string keys as follows:
+
+- Columns with a binary collation (`utf8mb4_bin`, `utf8mb4_0900_bin`, `latin1_bin`, ..., and `BINARY`/`VARBINARY` columns) already order by code point. They are compared as they are, and MySQL uses the column's index for the segment queries.
+- Any other collation: the key is compared as `CAST(key AS BINARY)`, byte order without padding, which orders exactly like namidiff and the other databases. MySQL cannot use the column's index for that expression, so every segment query scans the table. namidiff logs a warning once per key column.
+
+If a diff on such a table is too slow, add a functional index on the same expression (MySQL 8.0.13+). The optimizer then uses it for the segment range scans:
+
+```sql
+ALTER TABLE orders ADD INDEX namidiff_id_bin ((CAST(id AS BINARY)));
+```
+
+Alternatively give the key column a binary collation (`ALTER TABLE orders MODIFY id VARCHAR(36) COLLATE utf8mb4_0900_bin`), if the application can live with case-sensitive keys.
+
+Notes:
+
+- String keys must be alphanumeric: only ` -.0-9A-Z_a-z`. Other characters (`@`, accents, ...) make the column unusable as a key, on every database. UUID keys are detected separately and compared numerically, so they work with any collation.
+- `utf8mb4_bin`, `latin1_bin` and the other pre-8.0 binary collations are `PAD SPACE`: MySQL treats `'abc '` as equal to `'abc'`. namidiff never generates segment boundaries that end in a space, so this only matters when a key value ends in a space and another row has the same key without it. `utf8mb4_0900_bin` has no padding.
+- Same-database diffs (JOINDIFF) are not affected: the JOIN compares keys with the column's own collation.
+
 ### Oracle: thin and thick mode
 
 namidiff connects to Oracle with [python-oracledb](https://python-oracledb.readthedocs.io/), the successor of `cx_Oracle`. `cx_Oracle` is no longer maintained and does not install on Python 3.12+. `pip install namidiff[oracle]` installs `oracledb`; `cx_Oracle` is not needed any more and can be uninstalled.

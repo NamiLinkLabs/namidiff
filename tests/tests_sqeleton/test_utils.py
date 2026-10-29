@@ -152,6 +152,23 @@ class TestUtilsExtra(unittest.TestCase):
         assert a.__eq__(1) is NotImplemented
         assert a == ArithAlphanumeric("abc") and a != ArithAlphanumeric("abd")
 
+    def test_arith_alphanumeric_range_avoids_trailing_spaces(self):
+        from namidiff.sqeleton.utils import ArithAlphanumeric
+
+        lo, hi = ArithAlphanumeric("0"), ArithAlphanumeric("Zz")
+        # Space is digit 0, so evenly splitting '0'..'Zz' lands on 'C ' and 'O '. PAD SPACE collations
+        # (e.g. MySQL utf8mb4_bin) compare 'C ' equal to 'C', unlike Python, so the spaces are dropped.
+        self.assertEqual([str(c) for c in lo.range(hi, 2)], ["C", "O"])
+        for count in range(1, 30):
+            checkpoints = lo.range(hi, count)
+            self.assertEqual(len(checkpoints), count)
+            assert all(lo < c < hi for c in checkpoints), checkpoints
+            assert all(a < b for a, b in zip(checkpoints, checkpoints[1:])), checkpoints
+            assert not any(str(c).endswith(" ") for c in checkpoints), checkpoints
+        # Fixed-length alphanums keep their length
+        fixed = ArithAlphanumeric("0", max_len=4).range(ArithAlphanumeric("Zz", max_len=4), 2)
+        self.assertEqual([str(c) for c in fixed], ["   C", "   O"])
+
     def test_remove_password_no_password(self):
         from namidiff.sqeleton.utils import _join_if_any, remove_password_from_url
 

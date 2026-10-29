@@ -1,3 +1,5 @@
+import logging
+
 from ..abcs.database_types import (
     Datetime,
     Timestamp,
@@ -11,6 +13,9 @@ from ..abcs.database_types import (
     Boolean,
     Date,
     StringType,
+    String_Alphanum,
+    ColType,
+    DbPath,
 )
 from ..abcs.mixins import (
     AbstractMixin_MD5,
@@ -21,6 +26,17 @@ from ..abcs.mixins import (
 from .base import Mixin_OptimizerHints, ThreadedDatabase, import_helper, ConnectError, BaseDialect, Compilable
 from .base import MD5_HEXDIGITS, CHECKSUM_HEXDIGITS, TIMESTAMP_PRECISION_POS, Mixin_Schema, Mixin_RandomSample
 from ..queries.ast_classes import BinBoolOp
+
+logger = logging.getLogger("database")
+
+# Character sets whose code units are not bytes: cast them to utf8mb4 before comparing as binary,
+# otherwise byte order is not code point order.
+_MULTIBYTE_UNIT_CHARSETS = {"ucs2", "utf16", "utf16le", "utf32"}
+
+
+def is_binary_collation(collation: str) -> bool:
+    "True if the MySQL collation orders strings by code point (binary), i.e. like Python compares str."
+    return collation == "binary" or collation.endswith("_bin")
 
 
 @import_helper("mysql")
@@ -132,10 +148,82 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
     def set_timezone_to_utc(self) -> str:
         return "SET @@session.time_zone='+00:00'"
 
+    def parse_type(
+        self,
+        table_path: DbPath,
+        col_name: str,
+        type_repr: str,
+        datetime_precision: int = None,
+        numeric_precision: int = None,
+        numeric_scale: int = None,
+        collation_name: str = None,
+    ) -> ColType:
+        coltype = super().parse_type(
+            table_path, col_name, type_repr, datetime_precision, numeric_precision, numeric_scale
+        )
+        if isinstance(coltype, StringType):
+            if collation_name is None and type_repr in ("binary", "varbinary"):
+                # information_schema reports no collation for binary strings; they compare by bytes
+                collation_name = "binary"
+            coltype = coltype.replace(collation=collation_name)
+        return coltype
+
+    def collate_key(self, value: str, coltype: ColType) -> str:
+        """Order string keys by code point, like Python and the other databases do.
+
+        MySQL compares strings according to the column's collation. Case-insensitive and accent-insensitive
+        collations (the defaults: utf8mb4_0900_ai_ci, utf8mb4_general_ci, latin1_swedish_ci, ...) put
+        'a' before 'B', while Python, Snowflake, Postgres (C locale), BigQuery, etc. put 'B' before 'a'.
+        Bisecting an alphanumeric key range with such a collation assigns rows to different segments on
+        the two sides of the diff, which reports rows as missing or extra when they are not.
+
+        Columns that already use a binary collation (``*_bin``, ``binary``) are left alone, so their index
+        stays usable for range scans. For the others, the key is compared as ``cast(key as binary)``:
+        byte order, NO PAD, which matches Python exactly. MySQL cannot use the column's index for that,
+        so every segment query scans the table. See docs/supported-databases.md for how to add a
+        functional index when that is too slow.
+
+        UUID keys are not affected: namidiff compares them numerically, and the case-insensitive
+        collations order hex digits the same way.
+        """
+        if not isinstance(coltype, String_Alphanum):
+            return value
+
+        collation = coltype.collation
+        if collation is not None and is_binary_collation(collation):
+            return value
+
+        charset = collation.split("_", 1)[0] if collation else None
+        if charset in _MULTIBYTE_UNIT_CHARSETS:
+            expr = f"cast(convert({value} using utf8mb4) as binary)"
+        else:
+            expr = f"cast({value} as binary)"
+        self._warn_key_not_sargable(value, collation, expr)
+        return expr
+
+    def _warn_key_not_sargable(self, column: str, collation: str, expr: str) -> None:
+        "Warn once per column that MySQL cannot use the column's index for the key range predicates."
+        warned = self.__dict__.setdefault("_collated_keys_warned", set())
+        if (column, collation) in warned:
+            return
+        warned.add((column, collation))
+        reason = (
+            f"has collation '{collation}', which does not order strings by code point"
+            if collation
+            else "has an unknown collation"
+        )
+        logger.warning(
+            f"MySQL key column {column} {reason}. namidiff compares its key ranges as {expr}, "
+            f"which MySQL cannot use an index for, so every segment query scans the table. "
+            f"If the diff is slow on this table, add a functional index (MySQL 8.0.13+): "
+            f"ALTER TABLE <table> ADD INDEX (({expr}))"
+        )
+
 
 class MySQL(ThreadedDatabase):
     dialect = Dialect()
-    SUPPORTS_ALPHANUMS = False
+    # String keys work with any collation: collate_key() forces a binary order for non-binary collations.
+    SUPPORTS_ALPHANUMS = True
     SUPPORTS_UNIQUE_CONSTAINT = True
     CONNECT_URI_HELP = "mysql://<user>:<password>@<host>/<database>"
     CONNECT_URI_PARAMS = ["database?"]
@@ -150,6 +238,16 @@ class MySQL(ThreadedDatabase):
             self.default_schema = kw["database"]
         except KeyError:
             raise ValueError("MySQL URL must specify a database")
+
+    def select_table_schema(self, path: DbPath) -> str:
+        """Like the default, plus the column collation, which parse_type() keeps on string types."""
+        schema, name = self._normalize_table_path(path)
+
+        return (
+            "SELECT column_name, data_type, datetime_precision, numeric_precision, numeric_scale, collation_name "
+            "FROM information_schema.columns "
+            f"WHERE table_name = '{name}' AND table_schema = '{schema}'"
+        )
 
     def create_connection(self):
         mysql = import_mysql()
