@@ -6,6 +6,7 @@ import unittest
 from parameterized import parameterized
 
 from namidiff.sqeleton.abcs.database_types import String_VaryingAlphanum
+from namidiff.sqeleton.databases.mysql import NOPAD_BINARY_COLLATIONS
 from namidiff.sqeleton.queries import table, this, commit
 from namidiff.sqeleton.utils import ArithAlphanumeric, numberToAlphanum
 
@@ -13,9 +14,10 @@ from namidiff.hashdiff_tables import HashDiffer, compare_element, diff_sets
 from namidiff.joindiff_tables import JoinDiffer
 from namidiff.query_utils import drop_table
 from namidiff.table_segment import TableSegment, split_space, Vector
-from namidiff import databases as db
+from namidiff import connect, databases as db
 
 from .common import (
+    N_THREADS,
     str_to_checksum,
     test_each_database_in_list,
     DiffTestCase,
@@ -1076,7 +1078,9 @@ MYSQL_STRING_KEY_TYPES = [
 class TestMySQLStringKeyCollations(DiffTestCase):
     """String keys on MySQL, whose collations don't order strings the way Python does (erezsh/sqeleton#22).
 
-    Bisection is forced with a tiny bisection_threshold, so the key range predicates are what gets tested.
+    Checks that each column type is detected as an alphanumeric key, and that a same-database diff is right.
+    Both tables share a collation here, so this can't tell whether the key ranges are ordered like Python:
+    TestMySQLStringKeysAcrossDatabases checks that.
     """
 
     def _create_tables(self, key_type):
@@ -1102,36 +1106,64 @@ class TestMySQLStringKeyCollations(DiffTestCase):
 class TestMySQLStringKeysAcrossDatabases(unittest.TestCase):
     """MySQL (collation order) against DuckDB (code point order, like Snowflake or BigQuery).
 
-    Both sides must put each key in the same segment, or rows get reported missing on one side and extra on the other.
+    Both sides must put each key in the same segment, or rows get reported missing on one side and extra on the
+    other. Bisection is forced with a tiny bisection_threshold, so the key range predicates are what gets tested.
+    Runs with the expression the server supports ('detected': collate utf8mb4_0900_bin on MySQL 8.0.17+), and
+    with the one for servers without a NO PAD binary collation ('fallback': cast as binary, MySQL 5.7).
     """
 
     def setUp(self):
-        self.mysql = get_conn(db.MySQL)
+        # Own connection, since the fallback mode changes its dialect (get_conn(shared=False) returns the cached one)
+        self.mysql = connect(CONN_STRINGS[db.MySQL], N_THREADS, shared=False)
         self.duckdb = get_conn(db.DuckDB)
         suffix = random_table_suffix()
-        self.mysql_path = self.mysql.parse_table_name(f"src{suffix}")
+        self.mysql_name = f"src{suffix}"
+        self.mysql_path = self.mysql.parse_table_name(self.mysql_name)
         self.duckdb_path = self.duckdb.parse_table_name(f"dst{suffix}")
         drop_table(self.mysql, self.mysql_path)
         drop_table(self.duckdb, self.duckdb_path)
 
-        self.mysql.query(
-            f"CREATE TABLE src{suffix} (id VARCHAR(16) COLLATE utf8mb4_0900_ai_ci PRIMARY KEY, v VARCHAR(64))"
-        )
-        self.mysql.query([table(self.mysql_path).insert_rows(MIXED_CASE_ROWS), commit])
-        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
-        self.duckdb.query([table(self.duckdb_path).insert_rows(MIXED_CASE_ROWS_CHANGED), commit])
-
     def tearDown(self):
         drop_table(self.mysql, self.mysql_path)
         drop_table(self.duckdb, self.duckdb_path)
+        self.mysql.close()
 
-    def test_diff(self):
-        a = TableSegment(self.mysql, self.mysql_path, ("id",), extra_columns=("v",))
-        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",))
+    def _create_tables(self, key_type, mysql_rows, duckdb_rows):
+        self.mysql.query(f"CREATE TABLE {self.mysql_name} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+        self.mysql.query([table(self.mysql_path).insert_rows(mysql_rows), commit])
+        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
+        self.duckdb.query([table(self.duckdb_path).insert_rows(duckdb_rows), commit])
+
+    def _segments(self, mode):
+        a = TableSegment(self.mysql, self.mysql_path, ("id",), extra_columns=("v",)).with_schema()
+        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",)).with_schema()
+        self.assertIn(self.mysql.dialect.nopad_binary_collation, NOPAD_BINARY_COLLATIONS)
+        if mode == "fallback":
+            self.mysql.dialect.nopad_binary_collation = None
+        return a, b
+
+    @parameterized.expand([(t, mode) for mode in ("detected", "fallback") for t in MYSQL_STRING_KEY_TYPES])
+    def test_diff(self, key_type, mode):
+        self._create_tables(key_type, MIXED_CASE_ROWS, MIXED_CASE_ROWS_CHANGED)
+        a, b = self._segments(mode)
         differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
         self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
         flipped = sorted(("-" if sign == "+" else "+", row) for sign, row in MIXED_CASE_DIFF)
         self.assertEqual(sorted(differ.diff_tables(b, a)), flipped)
+
+    @parameterized.expand([("detected",), ("fallback",)])
+    def test_non_alphanumeric_key_in_latin1(self, mode):
+        """Only 64 rows are sampled to detect alphanumeric keys, so a later 'é' still reaches the key range.
+        Its latin1 byte isn't valid UTF-8: compared as raw bytes, min/max came back NULL, which read as
+        'table is empty' (or as no differences, with allow_empty_tables). It must fail like on other databases."""
+        rows = [(f"k{i:03}", str(i)) for i in range(70)] + [("zz\u00e9", "70")]
+        self._create_tables("VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci", rows, rows)
+        a, b = self._segments(mode)
+        self.assertEqual(a._schema["id"], String_VaryingAlphanum(collation="latin1_swedish_ci"))
+        self.assertEqual(a.query_key_range(), (("k000",), ("zz\u00e9",)))
+        for allow_empty_tables in (False, True):
+            differ = HashDiffer(bisection_factor=3, bisection_threshold=4, allow_empty_tables=allow_empty_tables)
+            self.assertRaisesRegex(ValueError, "Cannot apply", list, differ.diff_tables(a, b))
 
 
 @test_each_database

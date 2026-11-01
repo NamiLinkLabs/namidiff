@@ -1,6 +1,7 @@
 import uuid
 import decimal
 from abc import ABC, abstractmethod
+from dataclasses import field
 from typing import Sequence, Optional, Tuple, Union, Dict, List, TypeVar, Generic, Any
 from datetime import datetime
 
@@ -91,8 +92,8 @@ class StringType(ColType):
     python_type = str
     # Name of the collation the database orders this column by, when the dialect reports it (MySQL does).
     # None means unknown. Dialects read it in AbstractDialect.collate_key() to decide whether a key column
-    # needs a binary collation for its range predicates.
-    collation: Optional[str] = None
+    # needs a binary collation for its range predicates. Keyword-only, so that subclass fields keep their position.
+    collation: Optional[str] = field(default=None, kw_only=True)
 
 
 class ColType_UUID(ColType, IKey):

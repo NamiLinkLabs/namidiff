@@ -255,10 +255,12 @@ class ArithAlphanumeric(ArithString):
         # (MySQL's utf8mb4_bin, latin1_bin, ...) compare 'M ' equal to 'M', while Python (and NO PAD databases)
         # put 'M' before 'M '. Such a checkpoint would put the key 'M' in different segments on the two sides.
         # Drop the trailing spaces whenever the checkpoints stay strictly ordered within (self, other).
-        stripped = [c.rstrip(" ") for c in checkpoints]
-        bounds = [self._str, *stripped, other._str]
-        if all(a < b for a, b in zip(bounds, bounds[1:])):
-            checkpoints = stripped
+        # Not for fixed-length values: __str__ pads them on the left, so their spaces are digits like any other.
+        if not self._max_len:
+            stripped = [c.rstrip(" ") for c in checkpoints]
+            bounds = [self._str, *stripped, other._str]
+            if all(a < b for a, b in zip(bounds, bounds[1:])):
+                checkpoints = stripped
 
         return [self.new(c) for c in checkpoints]
 

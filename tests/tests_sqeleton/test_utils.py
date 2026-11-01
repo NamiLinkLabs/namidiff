@@ -165,9 +165,9 @@ class TestUtilsExtra(unittest.TestCase):
             assert all(lo < c < hi for c in checkpoints), checkpoints
             assert all(a < b for a, b in zip(checkpoints, checkpoints[1:])), checkpoints
             assert not any(str(c).endswith(" ") for c in checkpoints), checkpoints
-        # Fixed-length alphanums keep their length
+        # Fixed-length alphanums are padded on the left, so their trailing spaces are digits: keep them
         fixed = ArithAlphanumeric("0", max_len=4).range(ArithAlphanumeric("Zz", max_len=4), 2)
-        self.assertEqual([str(c) for c in fixed], ["   C", "   O"])
+        self.assertEqual([str(c) for c in fixed], ["  C ", "  O "])
 
     def test_remove_password_no_password(self):
         from namidiff.sqeleton.utils import _join_if_any, remove_password_from_url
