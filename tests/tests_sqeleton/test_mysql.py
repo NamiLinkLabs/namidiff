@@ -134,6 +134,7 @@ class TestMySQLStringKeys(unittest.TestCase):
         self.assertEqual(len(logs.output), 2)
         self.assertIn("utf8mb4_0900_ai_ci", logs.output[0])
         self.assertIn("ADD INDEX ((`id` collate utf8mb4_0900_bin))", logs.output[0])
+        self.assertIn("512 characters", logs.output[0])
         self.assertIn("`other`", logs.output[1])
 
         with self.assertLogs("database", level="WARNING") as logs:
@@ -169,7 +170,8 @@ class TestMySQLNoPadDetection(unittest.TestCase):
         for available, expected in [
             (["utf8mb4_0900_bin"], "utf8mb4_0900_bin"),
             (["utf8mb4_nopad_bin"], "utf8mb4_nopad_bin"),
-            (["utf8mb4_nopad_bin", "utf8mb4_0900_bin"], "utf8mb4_0900_bin"),
+            # MariaDB 11.4.5+ lists both: its utf8mb4_0900_bin is an alias, PAD SPACE in some releases
+            (["utf8mb4_nopad_bin", "utf8mb4_0900_bin"], "utf8mb4_nopad_bin"),
             ([], None),
         ]:
             database = mysql_without_server()

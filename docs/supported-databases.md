@@ -62,14 +62,14 @@ namidiff reads each key column's collation from `information_schema` and compare
 |---|---|
 | Binary collation (`utf8mb4_bin`, `utf8mb4_0900_bin`, `latin1_bin`, ...) or `VARBINARY` | the column as it is |
 | Any other collation, MySQL 8.0.17+ | `id COLLATE utf8mb4_0900_bin` |
-| Any other collation, MariaDB | `id COLLATE utf8mb4_nopad_bin` |
+| Any other collation, MariaDB 10.2+ | `id COLLATE utf8mb4_nopad_bin` |
 | Any other collation, MySQL 5.7 and 8.0 before 8.0.17 | `CAST(id AS BINARY)` |
 
 Columns in another character set than utf8mb4 (`latin1`, `utf8mb3`, `utf16`, ...) are converted first, e.g. `CONVERT(id USING utf8mb4) COLLATE utf8mb4_0900_bin`. All of these order exactly like namidiff and the other databases, without trailing-space padding.
 
 #### What it costs
 
-The database cannot use the key column's index for these expressions, so every segment query scans the table. namidiff logs a warning with the exact expression, once per key column. For a sense of scale, diffing two identical 1M-row tables on one MySQL 8.0 server (4 cores, both tables in the buffer pool, `--bisection-factor 32` unless noted):
+The database cannot use the key column's index for these expressions, so every segment query scans the table. namidiff logs a warning with the exact expression, once per key column. For a sense of scale, diffing two identical 1M-row tables with HASHDIFF (the default across two servers) on one MySQL 8.0 server (4 cores, both tables in the buffer pool, `--bisection-factor 32` unless noted):
 
 | Key column | `--threads 1` | `--threads 4` |
 |---|---|---|
@@ -91,7 +91,7 @@ Without changing the column's collation:
   ALTER TABLE orders ADD INDEX namidiff_id ((id COLLATE utf8mb4_0900_bin));
   ```
 
-  MySQL 5.7 has no functional indexes. MySQL 8.0.13 to 8.0.16 can index `CAST(id AS BINARY)`, which namidiff uses there, but only for keys up to 512 bytes (utf8mb4 `VARCHAR(128)`). MariaDB cannot index the expression.
+  MySQL accepts it for keys up to 512 characters (`VARCHAR(512)`), not for wider or `TEXT` keys. MySQL 5.7 has no functional indexes. MySQL 8.0.13 to 8.0.16 can index `CAST(id AS BINARY)`, which namidiff uses there, but only for keys up to 512 bytes (utf8mb4 `VARCHAR(128)`). MariaDB has no functional indexes, and MariaDB 10.11 doesn't use an indexed virtual column for the expression either.
 - **Without any change to the database**, check fewer segments per level, and check them in parallel. A lower `--bisection-factor` (e.g. 8) means fewer table scans, at the cost of more levels when the tables differ. More `--threads` run the scans in parallel, if the server has cores to spare.
 
 If the application can live with case-sensitive keys, giving the key column a binary collation (`ALTER TABLE orders MODIFY id VARCHAR(36) COLLATE utf8mb4_0900_bin`) also makes the regular index usable.
@@ -99,9 +99,9 @@ If the application can live with case-sensitive keys, giving the key column a bi
 #### Notes
 
 - String keys must be alphanumeric: only ` -.0-9A-Z_a-z`. Other characters (`@`, accents, ...) make the column unusable as a key, on every database. UUID keys are detected separately and compared numerically, so they work with any collation and keep their index.
-- `VARBINARY` keys work. `BINARY(n)` keys don't: MySQL pads their values with `0x00` bytes, so they never match the other side.
+- `VARBINARY` keys work. `BINARY(n)` keys only work if every value fills all `n` bytes: MySQL pads shorter values with `0x00` bytes. namidiff then refuses the column as a key, or reports the padded rows as different if none of them was in the sample it checks the column with.
 - `utf8mb4_bin`, `latin1_bin` and the other older binary collations are `PAD SPACE`: they treat `'abc '` as equal to `'abc'`. Keys that differ only in trailing spaces (`'abc'` on one side, `'abc '` on the other) are not supported.
-- JOINDIFF (both tables on the same database) joins on the column's own collation, but it splits the key range like HASHDIFF does, so the same expressions, cost and index advice apply.
+- JOINDIFF, which the CLI uses when both tables are on the same server, joins on the column's own collation. It still splits the key range into segments, with the same expressions and the same index advice. `--bisection-factor` has no effect on it though. Without an index, speed it up with `--threads`, or diff with `-a hashdiff` and a lower `--bisection-factor`.
 
 ### Oracle: thin and thick mode
 

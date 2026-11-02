@@ -1155,9 +1155,12 @@ class TestMySQLStringKeysAcrossDatabases(unittest.TestCase):
     def test_non_alphanumeric_key_in_latin1(self, mode):
         """Only 64 rows are sampled to detect alphanumeric keys, so a later 'é' still reaches the key range.
         Its latin1 byte isn't valid UTF-8: compared as raw bytes, min/max came back NULL, which read as
-        'table is empty' (or as no differences, with allow_empty_tables). It must fail like on other databases."""
-        rows = [(f"k{i:03}", str(i)) for i in range(70)] + [("zz\u00e9", "70")]
-        self._create_tables("VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci", rows, rows)
+        'table is empty' (or as no differences, with allow_empty_tables). It must fail like on other databases.
+        The DuckDB side lacks the 'é' row, so that its own key range can't raise the expected error instead."""
+        rows = [(f"k{i:03}", str(i)) for i in range(70)]
+        self._create_tables(
+            "VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci", rows + [("zz\u00e9", "70")], rows
+        )
         a, b = self._segments(mode)
         self.assertEqual(a._schema["id"], String_VaryingAlphanum(collation="latin1_swedish_ci"))
         self.assertEqual(a.query_key_range(), (("k000",), ("zz\u00e9",)))

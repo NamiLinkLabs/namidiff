@@ -32,8 +32,10 @@ from ..queries.ast_classes import BinBoolOp
 logger = logging.getLogger("database")
 
 # NO PAD collations that order utf8mb4 strings by code point, in order of preference.
-# MySQL 8.0.17+ has utf8mb4_0900_bin, MariaDB 10.2+ has utf8mb4_nopad_bin. MySQL 5.7 has neither.
-NOPAD_BINARY_COLLATIONS = ("utf8mb4_0900_bin", "utf8mb4_nopad_bin")
+# MariaDB 10.2+ has utf8mb4_nopad_bin, MySQL 8.0.17+ has utf8mb4_0900_bin, MySQL 5.7 has neither.
+# MariaDB 11.4.5+ also lists utf8mb4_0900_bin, as an alias that some releases made PAD SPACE (MDEV-36361),
+# so utf8mb4_nopad_bin comes first. MySQL has no utf8mb4_nopad_bin.
+NOPAD_BINARY_COLLATIONS = ("utf8mb4_nopad_bin", "utf8mb4_0900_bin")
 
 # Character sets whose bytes are UTF-8 (ascii is a subset of it), so that their byte order is code point order
 _UTF8_CHARSETS = {"utf8mb4", "utf8mb3", "utf8", "ascii"}
@@ -188,8 +190,8 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
 
         Columns that already use a binary collation (``*_bin``, ``binary``) are left alone, so their index
         stays usable for range scans. The others are compared in a NO PAD binary collation, converted to
-        utf8mb4 first unless they already are: ``key collate utf8mb4_0900_bin`` (MySQL 8.0.17+) or
-        ``key collate utf8mb4_nopad_bin`` (MariaDB). Servers that have neither (MySQL 5.7, 8.0 before
+        utf8mb4 first unless they already are: ``key collate utf8mb4_nopad_bin`` (MariaDB) or
+        ``key collate utf8mb4_0900_bin`` (MySQL 8.0.17+). Servers that have neither (MySQL 5.7, 8.0 before
         8.0.17) compare the UTF-8 bytes: ``cast(key as binary)``. All of these order exactly like Python,
         and none changes the table: they are expressions in namidiff's queries. The database cannot use the
         column's index for them though, so every segment query scans the table, unless the table has an
@@ -231,16 +233,17 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
             else "has an unknown collation"
         )
         index = f"ALTER TABLE <table> ADD INDEX (({expr}))"
-        if self.nopad_binary_collation == "utf8mb4_0900_bin":
-            # Only MySQL has this collation, and it supports functional indexes since 8.0.13
-            hint = f"If the diff is too slow, add a functional index: {index}"
-        elif self.nopad_binary_collation is None:
+        if self.nopad_binary_collation == "utf8mb4_nopad_bin":
+            # Only MariaDB has this collation (see NOPAD_BINARY_COLLATIONS), and it has no functional indexes
+            hint = "MariaDB cannot index this expression."
+        elif self.nopad_binary_collation is not None:
+            # MySQL 8.0.17+: functional indexes exist since 8.0.13, for expressions of up to 512 characters
+            hint = f"If the diff is too slow, add a functional index (keys up to 512 characters, not TEXT): {index}"
+        else:
             hint = (
                 "If the diff is too slow and the server is MySQL 8.0.13+, add a functional index "
-                f"(possible for keys up to 512 bytes, e.g. utf8mb4 VARCHAR(128)): {index}"
+                f"(keys up to 512 bytes, e.g. utf8mb4 VARCHAR(128)): {index}"
             )
-        else:
-            hint = "MariaDB cannot index this expression."
         logger.warning(
             f"MySQL key column {column} {reason}. namidiff compares its key ranges as {expr}, "
             f"which cannot use the column's index, so every segment query scans the table. {hint}"
