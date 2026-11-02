@@ -196,18 +196,37 @@ def alphanumToNumber(alphanum: str, base: str = alphanums) -> int:
     return num
 
 
-def justify_alphanums(s1: str, s2: str):
-    max_len = max(len(s1), len(s2))
-    s1 = s1.ljust(max_len)
-    s2 = s2.ljust(max_len)
-    return s1, s2
+# Positional encoding of alphanum strings that preserves Python string order.
+# Each character is a digit 1..len(alphanums), and digit 0 marks "end of string",
+# so that 'M' < 'M ' maps to [M, 0] < [M, 1]. (Plain base-66 with space as 0 would map both to the same number.)
+_ALPHANUM_ORDER_BASE = len(alphanums) + 1
+
+
+def _alphanum_to_ordered_number(s: str, length: int) -> int:
+    num = 0
+    for i in range(length):
+        num = num * _ALPHANUM_ORDER_BASE + (alphanums.index(s[i]) + 1 if i < len(s) else 0)
+    return num
+
+
+def _ordered_number_to_alphanum(num: int, length: int) -> str:
+    "Inverse of _alphanum_to_ordered_number. Monotonic (non-strictly) for any number of `length` digits."
+    digits = []
+    for _ in range(length):
+        num, d = divmod(num, _ALPHANUM_ORDER_BASE)
+        digits.append(d)
+    chars = []
+    for d in reversed(digits):
+        if d == 0:  # End of string; anything after it can only make a longer string, which would break order
+            break
+        chars.append(alphanums[d - 1])
+    return "".join(chars)
 
 
 def alphanums_to_numbers(s1: str, s2: str):
-    s1, s2 = justify_alphanums(s1, s2)
-    n1 = alphanumToNumber(s1)
-    n2 = alphanumToNumber(s2)
-    return n1, n2
+    "Map two alphanum strings to integers whose order and difference agree with Python string order"
+    length = max(len(s1), len(s2))
+    return _alphanum_to_ordered_number(s1, length), _alphanum_to_ordered_number(s2, length)
 
 
 class ArithAlphanumeric(ArithString):
@@ -240,16 +259,27 @@ class ArithAlphanumeric(ArithString):
         if isinstance(other, int):
             if other != 1:
                 raise NotImplementedError("not implemented for arbitrary numbers")
-            num = alphanumToNumber(self._str)
-            return self.new(numberToAlphanum(num + 1))
+            # Used as the exclusive upper bound after the max key, so it only has to sort after self.
+            # Appending a character always does, even for 'zz' (base-66 increment wrapped to '-  ').
+            # Not self + ' ': under PAD SPACE comparison (e.g. Postgres CHAR(n)) 'zz' == 'zz ',
+            # so that bound would exclude the max key. '-' is the smallest non-space character.
+            return type(self)(self._str + alphanums[1])
 
         return NotImplemented
 
     def range(self, other: "ArithAlphanumeric", count: int):
         assert isinstance(other, ArithAlphanumeric)
+        length = max(len(self._str), len(other._str))
         n1, n2 = alphanums_to_numbers(self._str, other._str)
         split = split_space(n1, n2, count)
-        return [self.new(numberToAlphanum(s)) for s in split]
+        # Decoding is monotonic but not strictly so (end-of-string digits truncate), so drop duplicates
+        # and points that collapsed onto the bounds.
+        points = []
+        for n in split:
+            s = _ordered_number_to_alphanum(n, length)
+            if self._str < s < other._str and (not points or points[-1] < s):
+                points.append(s)
+        return [self.new(s) for s in points]
 
     def __sub__(self, other: "Union[ArithAlphanumeric, int]") -> float:
         if isinstance(other, ArithAlphanumeric):
