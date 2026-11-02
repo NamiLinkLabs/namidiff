@@ -50,7 +50,7 @@ def _get_schema(pair):
 
 def diff_schemas(table1, table2, schema1, schema2, columns):
     logging.info("Diffing schemas...")
-    # Rows are (name, type, datetime_precision, numeric_precision, numeric_scale), plus the collation on MySQL.
+    # Rows are (name, type, datetime_precision, numeric_precision, numeric_scale), plus the collation on MySQL and PostgreSQL.
     # Both tables are on the same database here, so zip() just stops at whatever the dialect reports.
     attrs = "name", "type", "datetime_precision", "numeric_precision", "numeric_scale", "collation"
     for c in columns:

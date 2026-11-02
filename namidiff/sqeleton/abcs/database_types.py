@@ -90,7 +90,7 @@ class Boolean(ColType, IKey):
 @dataclass
 class StringType(ColType):
     python_type = str
-    # Name of the collation the database orders this column by, when the dialect reports it (MySQL does).
+    # Name of the collation the database orders this column by, when the dialect reports it (MySQL, PostgreSQL).
     # None means unknown. Dialects read it in AbstractDialect.collate_key() to decide whether a key column
     # needs a binary collation for its range predicates. Keyword-only, so that subclass fields keep their position.
     collation: Optional[str] = field(default=None, kw_only=True)
@@ -244,7 +244,7 @@ class AbstractDialect(ABC):
         namidiff splits a key range into segments on the Python side (see ``table_segment.split_key_space``),
         and asks the database for ``min(key)``, ``max(key)`` and ``key >= a AND key < b``.
         That is only correct if both sides agree on the order: numeric for numbers, and by code point
-        (i.e. binary) for strings. Databases that order strings by a linguistic collation (MySQL) override
+        (i.e. binary) for strings. Databases that order strings by a linguistic collation (MySQL, PostgreSQL) override
         this to force a binary order for string keys. The default returns 'value' unchanged.
         """
         return value
@@ -287,7 +287,7 @@ class AbstractDatabase(Generic[T_Dialect]):
     def query_table_schema(self, path: DbPath) -> Dict[str, tuple]:
         """Query the database for the schema of the table in 'path', and return {column: tuple, ...}
         where the tuple is (table_name, col_name, type_repr, datetime_precision?, numeric_precision?, numeric_scale?)
-        Dialects may append more items (MySQL appends collation_name), which their parse_type() must accept.
+        Dialects may append more items (MySQL and PostgreSQL append collation_name), which their parse_type() must accept.
 
         Use the method .process_query_table_schema() to convert the tuples into types.
 

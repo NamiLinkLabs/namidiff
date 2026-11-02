@@ -1169,6 +1169,88 @@ class TestMySQLStringKeysAcrossDatabases(unittest.TestCase):
             self.assertRaisesRegex(ValueError, "Cannot apply", list, differ.diff_tables(a, b))
 
 
+# Key types whose PostgreSQL collation orders differently from Python (all but the last three). ICU collations need
+# no locale installed on the server's OS, unlike libc ones such as en_US.utf8. Missing collations are skipped.
+POSTGRES_STRING_KEY_TYPES = [
+    ('VARCHAR(16) COLLATE "en-US-x-icu"', "en-US-x-icu"),
+    ('TEXT COLLATE "und-x-icu"', "und-x-icu"),
+    ('VARCHAR(16) COLLATE "en_US.utf8"', "en_US.utf8"),  # libc, glibc ignores punctuation at first
+    ('VARCHAR(16) COLLATE "C"', "C"),
+    ('VARCHAR(16) COLLATE "POSIX"', "POSIX"),
+    ('VARCHAR(16) COLLATE "ucs_basic"', "ucs_basic"),
+]
+
+
+@unittest.skipUnless(db.PostgreSQL in CONN_STRINGS, "Requires PostgreSQL")
+class TestPostgreSQLStringKeysAcrossDatabases(unittest.TestCase):
+    """PostgreSQL (collation order) against DuckDB (code point order, like Snowflake or BigQuery).
+
+    Like TestMySQLStringKeysAcrossDatabases: both sides must put each key in the same segment. Bisection is
+    forced with a tiny bisection_threshold, so the key range predicates and min/max are what gets tested.
+    """
+
+    def setUp(self):
+        self.postgres = get_conn(db.PostgreSQL)
+        self.duckdb = get_conn(db.DuckDB)
+        suffix = random_table_suffix()
+        self.postgres_name = f"src{suffix}"
+        self.duckdb_path = self.duckdb.parse_table_name(f"dst{suffix}")
+        self.postgres_path = self.postgres.parse_table_name(self.postgres_name)
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def tearDown(self):
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def _require_collation(self, conn, collation):
+        (count,) = conn.query(f"SELECT count(*) FROM pg_collation WHERE collname = '{collation}'", tuple)
+        if not count:
+            self.skipTest(f"Server has no collation {collation}")
+
+    def _diff(self, postgres, postgres_path, key_type, collation):
+        postgres.query(f"CREATE TABLE {postgres_path[-1]} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+        postgres.query([table(postgres_path).insert_rows(MIXED_CASE_ROWS), commit])
+        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
+        self.duckdb.query([table(self.duckdb_path).insert_rows(MIXED_CASE_ROWS_CHANGED), commit])
+
+        a = TableSegment(postgres, postgres_path, ("id",), extra_columns=("v",)).with_schema()
+        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",)).with_schema()
+        self.assertEqual(a._schema["id"], String_VaryingAlphanum(collation=collation))
+
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        flipped = sorted(("-" if sign == "+" else "+", row) for sign, row in MIXED_CASE_DIFF)
+        self.assertEqual(sorted(differ.diff_tables(b, a)), flipped)
+
+    @parameterized.expand(POSTGRES_STRING_KEY_TYPES)
+    def test_column_collation(self, key_type, collation):
+        self._require_collation(self.postgres, collation)
+        drop_table(self.postgres, self.postgres_path)
+        try:
+            self._diff(self.postgres, self.postgres_path, key_type, collation)
+        finally:
+            drop_table(self.postgres, self.postgres_path)
+
+    def test_database_collation(self):
+        """Columns in the database's default collation, which information_schema reports as NULL.
+        An ICU database (PostgreSQL 15+) keeps a libc locale in datcollate (often C.UTF-8) that doesn't apply."""
+        (version,) = self.postgres.query("SELECT current_setting('server_version_num')::int", tuple)
+        if version < 150000:
+            self.skipTest("ICU database locales require PostgreSQL 15+")
+        self._require_collation(self.postgres, "en-US-x-icu")
+
+        dbname = f"namidiff_icu{random_table_suffix()}"
+        self.postgres.query(f"CREATE DATABASE {dbname} LOCALE_PROVIDER icu ICU_LOCALE 'en-US' TEMPLATE template0")
+        try:
+            uri = CONN_STRINGS[db.PostgreSQL].rsplit("/", 1)[0] + "/" + dbname
+            icu_db = connect(uri, N_THREADS, shared=False)
+            try:
+                self._diff(icu_db, icu_db.parse_table_name("src"), "VARCHAR(16)", "en-US-x-icu")
+            finally:
+                icu_db.close()
+        finally:
+            self.postgres.query(f"DROP DATABASE {dbname}")
+
+
 @test_each_database
 class TestCompoundKeyAlphanum(DiffTestCase):
     src_schema = {"id": str, "id2": int, "comment": str}

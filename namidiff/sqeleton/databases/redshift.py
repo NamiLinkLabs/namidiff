@@ -1,5 +1,5 @@
 from typing import List, Dict
-from ..abcs.database_types import Float, TemporalType, FractionalType, DbPath, TimestampTZ
+from ..abcs.database_types import ColType, Float, TemporalType, FractionalType, DbPath, TimestampTZ
 from ..abcs.mixins import AbstractMixin_MD5
 from .postgresql import (
     PostgreSQL,
@@ -59,6 +59,16 @@ class Dialect(PostgresqlDialect):
 
     def is_distinct_from(self, a: str, b: str) -> str:
         return f"({a} IS NULL != {b} IS NULL) OR ({a}!={b})"
+
+    def collate_key(self, value: str, coltype: ColType) -> str:
+        """Leave keys as they are. Redshift has no locales: its default (case_sensitive) collation compares
+        strings by bytes, i.e. by code point, like Python. It doesn't support ``COLLATE "C"`` either, so
+        PostgreSQL's collate_key() doesn't apply.
+
+        Not handled: databases or columns created with ``COLLATE CASE_INSENSITIVE``, which order 'a1' before 'B'.
+        ``COLLATE(key, 'case_sensitive')`` would fix their order, but hasn't been tested on Redshift yet.
+        """
+        return value
 
     def type_repr(self, t) -> str:
         if isinstance(t, TimestampTZ):
