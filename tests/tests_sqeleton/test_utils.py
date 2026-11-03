@@ -156,8 +156,8 @@ class TestUtilsExtra(unittest.TestCase):
         from namidiff.sqeleton.utils import ArithAlphanumeric
 
         lo, hi = ArithAlphanumeric("0"), ArithAlphanumeric("Zz")
-        # Space is digit 0, so evenly splitting '0'..'Zz' lands on 'C ' and 'O '. PAD SPACE collations
-        # (e.g. MySQL utf8mb4_bin) compare 'C ' equal to 'C', unlike Python, so the spaces are dropped.
+        # Split points must not end in a space: PAD SPACE collations (e.g. MySQL utf8mb4_bin) compare 'C ' equal
+        # to 'C', unlike Python, which would put the key 'C' in different segments on the two sides.
         self.assertEqual([str(c) for c in lo.range(hi, 2)], ["C", "O"])
         for count in range(1, 30):
             checkpoints = lo.range(hi, count)
@@ -165,9 +165,70 @@ class TestUtilsExtra(unittest.TestCase):
             assert all(lo < c < hi for c in checkpoints), checkpoints
             assert all(a < b for a, b in zip(checkpoints, checkpoints[1:])), checkpoints
             assert not any(str(c).endswith(" ") for c in checkpoints), checkpoints
-        # Fixed-length alphanums are padded on the left, so their trailing spaces are digits: keep them
-        fixed = ArithAlphanumeric("0", max_len=4).range(ArithAlphanumeric("Zz", max_len=4), 2)
-        self.assertEqual([str(c) for c in fixed], ["  C ", "  O "])
+        # Fixed-length alphanums are padded on the left, so their trailing spaces are digits: never stripped
+        lo4, hi4 = ArithAlphanumeric("0", max_len=4), ArithAlphanumeric("Zz", max_len=4)
+        for count in range(1, 30):
+            fixed = lo4.range(hi4, count)
+            assert all(lo4 < c < hi4 for c in fixed) and all(a < b for a, b in zip(fixed, fixed[1:])), fixed
+
+    def test_arith_alphanumeric_successor(self):
+        from namidiff.sqeleton.utils import ArithAlphanumeric
+
+        # '+ 1' is the exclusive upper bound after the max key, so it must sort after the original
+        for s in ["z", "zz", "zzz", "a", "0a", "M ", "-", "Az_"]:
+            a = ArithAlphanumeric(s)
+            assert a < a + 1, (s, str(a + 1))
+            assert (a + 1) - a > 0
+        assert str(ArithAlphanumeric("zz") + 1) == "zz-"
+
+    def test_arith_alphanumeric_sub_matches_string_order(self):
+        import random
+        from namidiff.sqeleton.utils import ArithAlphanumeric, alphanums
+
+        A = ArithAlphanumeric
+        assert A("M ") - A("M") > 0
+        assert A("M") - A("M ") < 0
+        assert A("M") - A("M") == 0
+        assert A("b") - A("a") > 0 and A("a") - A("") > 0
+
+        rng = random.Random(0)
+        words = ["".join(rng.choice(alphanums) for _ in range(rng.randint(0, 4))) for _ in range(300)]
+        words += ["M", "M ", "M  ", "z", "zz", " ", "  "]
+        for w1, w2 in zip(words, words[1:] + words[:1]):
+            d = A(w2) - A(w1)
+            assert (d > 0) == (w2 > w1) and (d == 0) == (w2 == w1), (w1, w2, d)
+
+    def test_arith_alphanumeric_range(self):
+        import random
+        from namidiff.sqeleton.utils import ArithAlphanumeric, alphanums
+
+        A = ArithAlphanumeric
+        rng = random.Random(1)
+        pairs = [("0a", "zz-"), ("M", "M "), ("M", "Mc-"), ("a", "b"), ("", "zzzz"), ("a b", "a z")]
+        for _ in range(200):
+            w = sorted("".join(rng.choice(alphanums) for _ in range(rng.randint(0, 5))) for _ in range(2))
+            if w[0] != w[1]:
+                pairs.append(tuple(w))
+        for lo, hi in pairs:
+            for count in (1, 2, 7, 32):
+                count = min(count, A(hi) - A(lo))  # split_key_space never asks for more points than fit
+                points = [str(p) for p in A(lo).range(A(hi), count)]
+                assert len(points) <= count
+                # Strictly increasing and strictly inside the bounds, as split_key_space asserts
+                assert all(x < y for x, y in zip([lo] + points, points + [hi])), (lo, hi, count, points)
+        assert A("M").range(A("M "), 1) == []
+        assert len(A("0a").range(A("zz-"), 4)) == 4
+
+    def test_alphanumeric_key_segments(self):
+        from namidiff.sqeleton.utils import ArithAlphanumeric as A
+        from namidiff.table_segment import Vector, split_compound_key_space
+
+        # Regions from the second pass that differ only by a trailing space have a positive size
+        mn, mx = Vector([A("M")]), Vector([A("M ")])
+        assert all(d > 0 for d in mx - mn)
+        assert split_compound_key_space(mn, mx, 4) == [[A("M"), A("M ")]]
+        points = split_compound_key_space(Vector([A("0a")]), Vector([A("zz") + 1]), 8)[0]
+        assert points[0] == A("0a") and points[-1] == A("zz-") and len(points) == 10
 
     def test_remove_password_no_password(self):
         from namidiff.sqeleton.utils import _join_if_any, remove_password_from_url
