@@ -311,6 +311,8 @@ class Database(AbstractDatabase[T]):
     """
 
     default_schema: str = None
+    # Whether alphanumeric string columns may be used as keys. Requires that the database orders strings by
+    # code point, or that the dialect's collate_key() makes it do so for key columns.
     SUPPORTS_ALPHANUMS = True
     SUPPORTS_UNIQUE_CONSTAINT = False
 
@@ -536,10 +538,10 @@ class Database(AbstractDatabase[T]):
                     )
                 else:
                     assert col_name in col_dict
-                    col_dict[col_name] = String_UUID()
+                    col_dict[col_name] = String_UUID(collation=col_dict[col_name].collation)
                     continue
 
-            if self.SUPPORTS_ALPHANUMS:  # Anything but MySQL (so far)
+            if self.SUPPORTS_ALPHANUMS:
                 alphanum_samples = [s for s in samples if String_Alphanum.test_value(s)]
                 if alphanum_samples:
                     if len(alphanum_samples) != len(samples):
@@ -548,7 +550,8 @@ class Database(AbstractDatabase[T]):
                         )
                     else:
                         assert col_name in col_dict
-                        col_dict[col_name] = String_VaryingAlphanum()
+                        # Keep the collation: the dialect needs it to order the key column correctly (see collate_key)
+                        col_dict[col_name] = String_VaryingAlphanum(collation=col_dict[col_name].collation)
 
         return samples_by_row
 

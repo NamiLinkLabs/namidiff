@@ -170,6 +170,13 @@ If you pass `--stats` you'll see stats such as the % of rows were different.
   `count(*)`, for the reason mentioned above.
 * If the table is _very_ large, consider a larger `--bisection-factor`. Otherwise, you may run into timeouts.
 * If there are a lot of changes, consider a larger `--bisection-threshold`.
+* String (varchar) key columns on MySQL, MariaDB and PostgreSQL: namidiff compares them in
+  code point order to match the other database. On columns with a case-insensitive
+  collation (the MySQL default) or a linguistic one (PostgreSQL in e.g. `en_US.UTF-8`)
+  the database then cannot use the key's index for the segment queries, so each one
+  scans the table. See the MySQL and PostgreSQL notes in
+  [supported databases](supported-databases.md) for what that costs, and for an
+  index that removes the cost without changing the column's collation.
 * If there are very large gaps in your key column (e.g., 10s of millions of
   continuous rows missing), then Namidiff may perform poorly, doing lots of
   queries for ranges of rows that do not exist. We have ideas on how to tackle this issue, which we have yet to implement. If you're experiencing this effect, please open an issue, and we
