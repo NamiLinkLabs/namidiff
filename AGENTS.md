@@ -119,3 +119,9 @@ Entry point: `namidiff.__main__:main` (Click-based).
 - No type annotations required but preferred for new public API.
 - Queries are built via the compiler (`namidiff/sqeleton/abcs/compiler.py`) — avoid raw f-string SQL except inside dialect methods.
 Read HANDOFF.md if present before continue
+
+## Branches and pull requests
+
+- Name branches `<type>/<short-kebab-case-description>`, with type one of `fix`, `feat`, `docs`, `test` or `chore`, e.g. `fix/mysql-string-keys`. Never commit to `main`.
+- Cloud sessions start on a generated branch such as `claude/youthful-hopper-lwy6zm`. Before the first commit, create a branch named as above and commit and push there instead, unless the user named a branch.
+- Several sessions may work on this repository at once. Before starting, list the open pull requests and the remote branches. If one already covers the same change, build on it rather than opening a second one.
