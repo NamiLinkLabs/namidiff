@@ -78,6 +78,11 @@ class Mixin_NormalizeValue(AbstractMixin_NormalizeValue):
     def normalize_uuid(self, value: str, coltype: ColType_UUID) -> str:
         return f"TRIM(CAST({value} AS char))"
 
+    def normalize_boolean(self, value: str, _coltype: Boolean) -> str:
+        # cast(bit as char) returns the raw bytes (e.g. b'\x01'). Going through unsigned gives '0'/'1'
+        # for BIT(1), and the plain number for wider BIT(n) (bin() would give '101' instead of '5').
+        return self.to_string(f"cast({value} as unsigned)")
+
     def normalize_text(self, value: str, coltype: StringType) -> str:
         if self.empty_string_as_null:
             return f"NULLIF(cast({value} as char), '')"
@@ -121,6 +126,7 @@ class Dialect(BaseDialect, Mixin_Schema, Mixin_OptimizerHints):
         "tinytext": Text,
         # Boolean
         "boolean": Boolean,
+        "bit": Boolean,
     }
     MIXINS = {Mixin_Schema, Mixin_MD5, Mixin_NormalizeValue, Mixin_RandomSample, Mixin_Regex}
 

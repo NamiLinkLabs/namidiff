@@ -108,6 +108,7 @@ DATABASE_TYPES = {
         "uuid_native": [],
         "boolean": [
             "boolean",
+            "bit(1)",
         ],
     },
     db.DuckDB: {
