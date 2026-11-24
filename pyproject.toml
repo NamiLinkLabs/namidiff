@@ -94,7 +94,7 @@ dev = [
     "oracledb",
     "clickhouse-driver",
     "vertica-python",
-    "duckdb<1.2",
+    "duckdb",
     # "google-cloud-bigquery",
     # "databricks-sql-connector",
     "pandas>=2.1",

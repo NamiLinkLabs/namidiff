@@ -181,13 +181,13 @@ class DuckDB(Database):
     def select_table_schema(self, path: DbPath) -> str:
         database, schema, table = self._normalize_table_path(path)
 
-        info_schema_path = ["information_schema", "columns"]
-        if database:
-            info_schema_path.insert(0, database)
+        # The global information_schema lists every attached catalog; <catalog>.information_schema
+        # no longer exists in newer DuckDB versions (>= 1.4), so filter by table_catalog instead.
+        catalog_filter = f" AND table_catalog = '{database}'" if database else ""
 
         return (
-            f"SELECT column_name, data_type, datetime_precision, numeric_precision, numeric_scale FROM {'.'.join(info_schema_path)} "
-            f"WHERE table_name = '{table}' AND table_schema = '{schema}'"
+            f"SELECT column_name, data_type, datetime_precision, numeric_precision, numeric_scale FROM information_schema.columns "
+            f"WHERE table_name = '{table}' AND table_schema = '{schema}'{catalog_filter}"
         )
 
     def _normalize_table_path(self, path: DbPath) -> DbPath:
