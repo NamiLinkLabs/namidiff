@@ -11,8 +11,9 @@ WORKDIR $PRESTO_HOME
 RUN set -xe \
     && apt-get update \
     && apt-get install -y curl less python-is-python3 \
-    && curl -sSL $PRESTO_SERVER_URL | tar xz --strip 1 \
-    && curl -sSL $PRESTO_CLI_URL > ./bin/presto \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o /tmp/presto.tar.gz $PRESTO_SERVER_URL \
+    && tar xzf /tmp/presto.tar.gz --strip 1 && rm /tmp/presto.tar.gz \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o ./bin/presto $PRESTO_CLI_URL \
     && chmod +x ./bin/presto \
     && apt-get remove -y curl \
     && rm -rf /var/lib/apt/lists/*
