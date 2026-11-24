@@ -49,6 +49,10 @@ class TestHashDiffer(DuckDBTestCase):
         "hd_big2": ("id INTEGER, s VARCHAR", [(i, f"s{i}") for i in range(20) if i != 7]),
         "hd_dec1": ("id DECIMAL(10,2), s VARCHAR", [(i / 4, f"s{i}") for i in range(1, 200)]),
         "hd_dec2": ("id DECIMAL(10,2), s VARCHAR", [(i / 4, f"s{i}") for i in range(1, 200) if i != 77]),
+        "hd_zz1": ("id VARCHAR, s VARCHAR", [("0a", "x"), ("aC", "y"), ("zz", "z")]),
+        "hd_zz2": ("id VARCHAR, s VARCHAR", [("0a", "x"), ("aC", "y"), ("zz", "Z")]),
+        "hd_sp_a": ("id VARCHAR, s VARCHAR", [("M", "m"), ("Ma", "a"), ("Mb", "b"), ("Mc", "c")]),
+        "hd_sp_b": ("id VARCHAR, s VARCHAR", [("M ", "m"), ("Ma", "a"), ("Mb", "b"), ("Mc", "c")]),
     }
 
     def test_fractional_key(self):
@@ -56,6 +60,20 @@ class TestHashDiffer(DuckDBTestCase):
         differ = HashDiffer(bisection_threshold=8, bisection_factor=4)
         diff = list(differ.diff_tables(self.seg("hd_dec1", "s"), self.seg("hd_dec2", "s")))
         assert diff == [("-", ("19.25", "s77"))], diff
+
+    def test_alphanum_all_z_max_key(self):
+        # 'zz' + 1 used to wrap around to '-  ', which sorts before 'zz' and broke the key range
+        t1, t2 = self.seg("hd_zz1", "s"), self.seg("hd_zz2", "s")
+        assert t1.key_types[0].__class__.__name__ == "String_VaryingAlphanum"
+        diff = list(HashDiffer(threaded=False).diff_tables(t1, t2))
+        assert sorted(diff) == [("+", ("zz", "Z")), ("-", ("zz", "z"))], diff
+
+    def test_alphanum_trailing_space_region(self):
+        # The second pass builds the region ('M', 'M '), which used to measure as size 0 and fail an assert
+        t1, t2 = self.seg("hd_sp_b", "s"), self.seg("hd_sp_a", "s")
+        for threaded in (False, True):
+            diff = list(HashDiffer(threaded=threaded).diff_tables(t1, t2))
+            assert sorted(diff) == [("+", ("M", "m")), ("-", ("M ", "m"))], diff
 
     def test_sample_rows_logged_at_debug_only(self):
         t1, t2 = self.seg("hd_d", "s"), self.seg("hd_e", "s")

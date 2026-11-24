@@ -3,15 +3,29 @@ from typing import Callable
 import uuid
 import unittest
 
+from parameterized import parameterized
+
+from namidiff.sqeleton.abcs.database_types import String_VaryingAlphanum
+from namidiff.sqeleton.databases.mysql import NOPAD_BINARY_COLLATIONS
 from namidiff.sqeleton.queries import table, this, commit
 from namidiff.sqeleton.utils import ArithAlphanumeric, numberToAlphanum
 
 from namidiff.hashdiff_tables import HashDiffer, compare_element, diff_sets
 from namidiff.joindiff_tables import JoinDiffer
+from namidiff.query_utils import drop_table
 from namidiff.table_segment import TableSegment, split_space, Vector
-from namidiff import databases as db
+from namidiff import connect, databases as db
 
-from .common import str_to_checksum, test_each_database_in_list, DiffTestCase, table_segment
+from .common import (
+    N_THREADS,
+    str_to_checksum,
+    test_each_database_in_list,
+    DiffTestCase,
+    table_segment,
+    CONN_STRINGS,
+    get_conn,
+    random_table_suffix,
+)
 
 
 TEST_DATABASES = {
@@ -391,7 +405,7 @@ class TestUUIDs(DiffTestCase):
         self.assertRaises(ValueError, list, differ.diff_tables(a_empty, self.b))
 
 
-@test_each_database_in_list(TEST_DATABASES - {db.MySQL})
+@test_each_database
 class TestAlphanumericKeys(DiffTestCase):
     src_schema = {"id": str, "text_comment": str}
 
@@ -436,7 +450,7 @@ class TestAlphanumericKeys(DiffTestCase):
         self.assertRaises(NotImplementedError, list, differ.diff_tables(self.a, self.b))
 
 
-@test_each_database_in_list(TEST_DATABASES - {db.MySQL})
+@test_each_database
 class TestVaryingAlphanumericKeys(DiffTestCase):
     src_schema = {"id": str, "text_comment": str}
 
@@ -1032,6 +1046,209 @@ class TestCompoundKeySimple3(DiffTestCase):
         bb = TableSegment(self.connection, self.dst_table.path, ("id", "id2"))
         diff = set(differ.diff_tables(aa, bb))
         self.assertEqual(diff, expected)
+
+
+# Alphanumeric keys whose code point order differs from MySQL's case-insensitive collations:
+# in binary order 'B' < 'Z9' < '_x' < 'a1', in utf8mb4_0900_ai_ci '_x' < 'a1' < 'B' < 'Z9'.
+# No two keys are equal under a case-insensitive collation, so they fit a PRIMARY KEY of any collation.
+# fmt: off
+MIXED_CASE_KEYS = [
+    "B", "a1", "C", "b2", "Z9", "z10", "_x", "A_", "0a", "9Z", "Ab", "aC", "M", "M-", "M.", "m0",
+    "Q1", "q2", "R", "r3", "S2x", "s2Y", "T_", "t_1", "U", "u4", "Vv", "vW", "W9", "w8", "X", "x5", "Y.", "y6",
+]
+# fmt: on
+MIXED_CASE_ROWS = [(k, f"value of {k}") for k in MIXED_CASE_KEYS]
+# The second table lacks 'Vv' and has another value for 'aC'
+MIXED_CASE_ROWS_CHANGED = [(k, "CHANGED" if k == "aC" else v) for k, v in MIXED_CASE_ROWS if k != "Vv"]
+MIXED_CASE_DIFF = [("+", ("aC", "CHANGED")), ("-", ("Vv", "value of Vv")), ("-", ("aC", "value of aC"))]
+
+MYSQL_STRING_KEY_TYPES = [
+    "VARCHAR(16) COLLATE utf8mb4_0900_ai_ci",  # MySQL 8 default
+    "VARCHAR(16) COLLATE utf8mb4_general_ci",  # MySQL 5.7 default
+    "VARCHAR(16) COLLATE utf8mb4_0900_as_cs",
+    "VARCHAR(16) COLLATE utf8mb4_bin",
+    "VARCHAR(16) COLLATE utf8mb4_0900_bin",
+    "VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci",
+    "VARCHAR(16) CHARACTER SET utf16 COLLATE utf16_general_ci",  # code units are not bytes
+    "VARBINARY(16)",
+]
+
+
+@test_each_database_in_list({db.MySQL})
+class TestMySQLStringKeyCollations(DiffTestCase):
+    """String keys on MySQL, whose collations don't order strings the way Python does (erezsh/sqeleton#22).
+
+    Checks that each column type is detected as an alphanumeric key, and that a same-database diff is right.
+    Both tables share a collation here, so this can't tell whether the key ranges are ordered like Python:
+    TestMySQLStringKeysAcrossDatabases checks that.
+    """
+
+    def _create_tables(self, key_type):
+        for name, rows in [(self.table_src_name, MIXED_CASE_ROWS), (self.table_dst_name, MIXED_CASE_ROWS_CHANGED)]:
+            self.connection.query(f"CREATE TABLE {name} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+            self.connection.query([table(self.connection.parse_table_name(name)).insert_rows(rows), commit])
+
+    @parameterized.expand([(t,) for t in MYSQL_STRING_KEY_TYPES])
+    def test_string_key(self, key_type):
+        self._create_tables(key_type)
+        a = TableSegment(self.connection, self.table_src_path, ("id",), extra_columns=("v",))
+        b = TableSegment(self.connection, self.table_dst_path, ("id",), extra_columns=("v",))
+
+        collation = key_type.split("COLLATE ")[1] if "COLLATE" in key_type else "binary"
+        self.assertEqual(a.with_schema()._schema["id"], String_VaryingAlphanum(collation=collation))
+
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        self.assertEqual(list(differ.diff_tables(a, a)), [])
+
+
+@unittest.skipUnless(db.MySQL in CONN_STRINGS, "Requires MySQL")
+class TestMySQLStringKeysAcrossDatabases(unittest.TestCase):
+    """MySQL (collation order) against DuckDB (code point order, like Snowflake or BigQuery).
+
+    Both sides must put each key in the same segment, or rows get reported missing on one side and extra on the
+    other. Bisection is forced with a tiny bisection_threshold, so the key range predicates are what gets tested.
+    Runs with the expression the server supports ('detected': collate utf8mb4_0900_bin on MySQL 8.0.17+), and
+    with the one for servers without a NO PAD binary collation ('fallback': cast as binary, MySQL 5.7).
+    """
+
+    def setUp(self):
+        # Own connection, since the fallback mode changes its dialect (get_conn(shared=False) returns the cached one)
+        self.mysql = connect(CONN_STRINGS[db.MySQL], N_THREADS, shared=False)
+        self.duckdb = get_conn(db.DuckDB)
+        suffix = random_table_suffix()
+        self.mysql_name = f"src{suffix}"
+        self.mysql_path = self.mysql.parse_table_name(self.mysql_name)
+        self.duckdb_path = self.duckdb.parse_table_name(f"dst{suffix}")
+        drop_table(self.mysql, self.mysql_path)
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def tearDown(self):
+        drop_table(self.mysql, self.mysql_path)
+        drop_table(self.duckdb, self.duckdb_path)
+        self.mysql.close()
+
+    def _create_tables(self, key_type, mysql_rows, duckdb_rows):
+        self.mysql.query(f"CREATE TABLE {self.mysql_name} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+        self.mysql.query([table(self.mysql_path).insert_rows(mysql_rows), commit])
+        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
+        self.duckdb.query([table(self.duckdb_path).insert_rows(duckdb_rows), commit])
+
+    def _segments(self, mode):
+        a = TableSegment(self.mysql, self.mysql_path, ("id",), extra_columns=("v",)).with_schema()
+        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",)).with_schema()
+        self.assertIn(self.mysql.dialect.nopad_binary_collation, NOPAD_BINARY_COLLATIONS)
+        if mode == "fallback":
+            self.mysql.dialect.nopad_binary_collation = None
+        return a, b
+
+    @parameterized.expand([(t, mode) for mode in ("detected", "fallback") for t in MYSQL_STRING_KEY_TYPES])
+    def test_diff(self, key_type, mode):
+        self._create_tables(key_type, MIXED_CASE_ROWS, MIXED_CASE_ROWS_CHANGED)
+        a, b = self._segments(mode)
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        flipped = sorted(("-" if sign == "+" else "+", row) for sign, row in MIXED_CASE_DIFF)
+        self.assertEqual(sorted(differ.diff_tables(b, a)), flipped)
+
+    @parameterized.expand([("detected",), ("fallback",)])
+    def test_non_alphanumeric_key_in_latin1(self, mode):
+        """Only 64 rows are sampled to detect alphanumeric keys, so a later 'é' still reaches the key range.
+        Its latin1 byte isn't valid UTF-8: compared as raw bytes, min/max came back NULL, which read as
+        'table is empty' (or as no differences, with allow_empty_tables). It must fail like on other databases.
+        The DuckDB side lacks the 'é' row, so that its own key range can't raise the expected error instead."""
+        rows = [(f"k{i:03}", str(i)) for i in range(70)]
+        self._create_tables(
+            "VARCHAR(16) CHARACTER SET latin1 COLLATE latin1_swedish_ci", rows + [("zz\u00e9", "70")], rows
+        )
+        a, b = self._segments(mode)
+        self.assertEqual(a._schema["id"], String_VaryingAlphanum(collation="latin1_swedish_ci"))
+        self.assertEqual(a.query_key_range(), (("k000",), ("zz\u00e9",)))
+        for allow_empty_tables in (False, True):
+            differ = HashDiffer(bisection_factor=3, bisection_threshold=4, allow_empty_tables=allow_empty_tables)
+            self.assertRaisesRegex(ValueError, "Cannot apply", list, differ.diff_tables(a, b))
+
+
+# Key types whose PostgreSQL collation orders differently from Python (all but the last three). ICU collations need
+# no locale installed on the server's OS, unlike libc ones such as en_US.utf8. Missing collations are skipped.
+POSTGRES_STRING_KEY_TYPES = [
+    ('VARCHAR(16) COLLATE "en-US-x-icu"', "en-US-x-icu"),
+    ('TEXT COLLATE "und-x-icu"', "und-x-icu"),
+    ('VARCHAR(16) COLLATE "en_US.utf8"', "en_US.utf8"),  # libc, glibc ignores punctuation at first
+    ('VARCHAR(16) COLLATE "C"', "C"),
+    ('VARCHAR(16) COLLATE "POSIX"', "POSIX"),
+    ('VARCHAR(16) COLLATE "ucs_basic"', "ucs_basic"),
+]
+
+
+@unittest.skipUnless(db.PostgreSQL in CONN_STRINGS, "Requires PostgreSQL")
+class TestPostgreSQLStringKeysAcrossDatabases(unittest.TestCase):
+    """PostgreSQL (collation order) against DuckDB (code point order, like Snowflake or BigQuery).
+
+    Like TestMySQLStringKeysAcrossDatabases: both sides must put each key in the same segment. Bisection is
+    forced with a tiny bisection_threshold, so the key range predicates and min/max are what gets tested.
+    """
+
+    def setUp(self):
+        self.postgres = get_conn(db.PostgreSQL)
+        self.duckdb = get_conn(db.DuckDB)
+        suffix = random_table_suffix()
+        self.postgres_name = f"src{suffix}"
+        self.duckdb_path = self.duckdb.parse_table_name(f"dst{suffix}")
+        self.postgres_path = self.postgres.parse_table_name(self.postgres_name)
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def tearDown(self):
+        drop_table(self.duckdb, self.duckdb_path)
+
+    def _require_collation(self, conn, collation):
+        (count,) = conn.query(f"SELECT count(*) FROM pg_collation WHERE collname = '{collation}'", tuple)
+        if not count:
+            self.skipTest(f"Server has no collation {collation}")
+
+    def _diff(self, postgres, postgres_path, key_type, collation):
+        postgres.query(f"CREATE TABLE {postgres_path[-1]} (id {key_type} PRIMARY KEY, v VARCHAR(64))")
+        postgres.query([table(postgres_path).insert_rows(MIXED_CASE_ROWS), commit])
+        self.duckdb.query(table(self.duckdb_path, schema={"id": str, "v": str}).create())
+        self.duckdb.query([table(self.duckdb_path).insert_rows(MIXED_CASE_ROWS_CHANGED), commit])
+
+        a = TableSegment(postgres, postgres_path, ("id",), extra_columns=("v",)).with_schema()
+        b = TableSegment(self.duckdb, self.duckdb_path, ("id",), extra_columns=("v",)).with_schema()
+        self.assertEqual(a._schema["id"], String_VaryingAlphanum(collation=collation))
+
+        differ = HashDiffer(bisection_factor=3, bisection_threshold=4)
+        self.assertEqual(sorted(differ.diff_tables(a, b)), MIXED_CASE_DIFF)
+        flipped = sorted(("-" if sign == "+" else "+", row) for sign, row in MIXED_CASE_DIFF)
+        self.assertEqual(sorted(differ.diff_tables(b, a)), flipped)
+
+    @parameterized.expand(POSTGRES_STRING_KEY_TYPES)
+    def test_column_collation(self, key_type, collation):
+        self._require_collation(self.postgres, collation)
+        drop_table(self.postgres, self.postgres_path)
+        try:
+            self._diff(self.postgres, self.postgres_path, key_type, collation)
+        finally:
+            drop_table(self.postgres, self.postgres_path)
+
+    def test_database_collation(self):
+        """Columns in the database's default collation, which information_schema reports as NULL.
+        An ICU database (PostgreSQL 15+) keeps a libc locale in datcollate (often C.UTF-8) that doesn't apply."""
+        (version,) = self.postgres.query("SELECT current_setting('server_version_num')::int", tuple)
+        if version < 150000:
+            self.skipTest("ICU database locales require PostgreSQL 15+")
+        self._require_collation(self.postgres, "en-US-x-icu")
+
+        dbname = f"namidiff_icu{random_table_suffix()}"
+        self.postgres.query(f"CREATE DATABASE {dbname} LOCALE_PROVIDER icu ICU_LOCALE 'en-US' TEMPLATE template0")
+        try:
+            uri = CONN_STRINGS[db.PostgreSQL].rsplit("/", 1)[0] + "/" + dbname
+            icu_db = connect(uri, N_THREADS, shared=False)
+            try:
+                self._diff(icu_db, icu_db.parse_table_name("src"), "VARCHAR(16)", "en-US-x-icu")
+            finally:
+                icu_db.close()
+        finally:
+            self.postgres.query(f"DROP DATABASE {dbname}")
 
 
 @test_each_database

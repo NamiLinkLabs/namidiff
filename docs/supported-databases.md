@@ -52,6 +52,84 @@ namidiff cannot switch to `SHA2()` instead: row checksums must match the `MD5()`
 
 See the [MySQL Legacy Hashing Component docs](https://dev.mysql.com/doc/refman/9.7/en/legacy-hashing-component.html).
 
+### MySQL and MariaDB: string (varchar) key columns
+
+HASHDIFF splits the key range into segments on the namidiff side, then asks each database for `min(key)`, `max(key)` and `key >= a AND key < b`. That only works when both databases order keys the same way namidiff does. For numbers that is a given. For strings, namidiff and most databases (Snowflake, BigQuery, DuckDB, Redshift, PostgreSQL in the `C` locale) compare by code point (see [below](#postgresql-string-text-varchar-key-columns) for PostgreSQL in other locales): `'B' < 'Z9' < '_x' < 'a1'`. MySQL and MariaDB compare by the column's collation, and the defaults are case-insensitive: under `utf8mb4_0900_ai_ci` (MySQL 8), `utf8mb4_general_ci` (MySQL 5.7) or `latin1_swedish_ci` the same keys order as `'_x' < 'a1' < 'B' < 'Z9'`. The segments then contain different rows on the two sides, and the diff reports rows as missing or extra that are not, or fails with `min_key expected to be smaller than max_key`. This is why MySQL used to refuse string keys altogether (`SUPPORTS_ALPHANUMS = False`, see [erezsh/sqeleton#22](https://github.com/erezsh/sqeleton/issues/22)).
+
+namidiff reads each key column's collation from `information_schema` and compares string keys in code point order, whatever the collation. It does so in the expressions of its own queries: nothing in the database changes, and read access is enough.
+
+| Key column | Compared as |
+|---|---|
+| Binary collation (`utf8mb4_bin`, `utf8mb4_0900_bin`, `latin1_bin`, ...) or `VARBINARY` | the column as it is |
+| Any other collation, MySQL 8.0.17+ | `id COLLATE utf8mb4_0900_bin` |
+| Any other collation, MariaDB 10.2+ | `id COLLATE utf8mb4_nopad_bin` |
+| Any other collation, MySQL 5.7 and 8.0 before 8.0.17 | `CAST(id AS BINARY)` |
+
+Columns in another character set than utf8mb4 (`latin1`, `utf8mb3`, `utf16`, ...) are converted first, e.g. `CONVERT(id USING utf8mb4) COLLATE utf8mb4_0900_bin`. All of these order exactly like namidiff and the other databases, without trailing-space padding.
+
+#### What it costs
+
+The database cannot use the key column's index for these expressions, so every segment query scans the table. namidiff logs a warning with the exact expression, once per key column. For a sense of scale, diffing two identical 1M-row tables on one MySQL 8.0 server (4 cores, both tables in the buffer pool, `--bisection-factor 32` unless noted). HASHDIFF is the default across two servers, JOINDIFF the default when both tables are on one server:
+
+| Algorithm and key column | `--threads 1` | `--threads 4` |
+|---|---|---|
+| HASHDIFF, `utf8mb4_bin`, so the key's index is used | 4.0s | 1.7s |
+| HASHDIFF, `utf8mb4_0900_ai_ci`, compared with `COLLATE utf8mb4_0900_bin` | 18.2s | 5.0s |
+| the same, with `--bisection-factor 8` | 7.2s | 2.5s |
+| the same, on MySQL 5.7 (`CAST(id AS BINARY)`) | 21.0s | – |
+| HASHDIFF, `utf8mb4_0900_ai_ci`, with an index on the expression (below) | 7.4s | – |
+| JOINDIFF, `utf8mb4_bin` | 22.5s | 12.5s |
+| JOINDIFF, `utf8mb4_0900_ai_ci`, compared with `COLLATE utf8mb4_0900_bin` | 87.8s | 33.2s |
+| JOINDIFF, `utf8mb4_0900_ai_ci`, with an index on the expression | 52.1s | – |
+
+The extra time grows with the table size and with the number of segments namidiff checks. On identical tables, that is one level of `--bisection-factor` segments. Differences add a level of segments for each mismatching segment.
+
+#### Making it faster
+
+Without changing the column's collation:
+
+- **Add an index on the expression** (MySQL 8.0.13+). The optimizer then uses it for the segment queries and for min/max. Use the expression from the warning, exactly as namidiff writes it:
+
+  ```sql
+  ALTER TABLE orders ADD INDEX namidiff_id ((id COLLATE utf8mb4_0900_bin));
+  ```
+
+  MySQL accepts it for keys up to 512 characters (`VARCHAR(512)`), not for wider or `TEXT` keys. MySQL 5.7 has no functional indexes. MySQL 8.0.13 to 8.0.16 can index `CAST(id AS BINARY)`, which namidiff uses there, but only for keys up to 512 bytes (utf8mb4 `VARCHAR(128)`). MariaDB has no functional indexes, and MariaDB 10.11 doesn't use an indexed virtual column for the expression either.
+- **Without any change to the database**, check fewer segments per level, and check them in parallel. A lower `--bisection-factor` (e.g. 8) means fewer table scans, at the cost of more levels when the tables differ. More `--threads` run the scans in parallel, if the server has cores to spare.
+
+If the application can live with case-sensitive keys, giving the key column a binary collation (`ALTER TABLE orders MODIFY id VARCHAR(36) COLLATE utf8mb4_0900_bin`) also makes the regular index usable.
+
+#### Notes
+
+- String keys must be alphanumeric: only ` -.0-9A-Z_a-z`. Other characters (`@`, accents, ...) make the column unusable as a key, on every database. UUID keys are detected separately and compared numerically, so they work with any collation and keep their index.
+- `VARBINARY` keys work. `BINARY(n)` keys only work if every value fills all `n` bytes: MySQL pads shorter values with `0x00` bytes. namidiff then refuses the column as a key, or reports the padded rows as different if none of them was in the sample it checks the column with.
+- `utf8mb4_bin`, `latin1_bin` and the other older binary collations are `PAD SPACE`: they treat `'abc '` as equal to `'abc'`. Keys that differ only in trailing spaces (`'abc'` on one side, `'abc '` on the other) are not supported.
+- JOINDIFF, which the CLI uses when both tables are on the same server, joins on the column's own collation. It still splits the key range into segments, with the same expressions and the same index advice. `--bisection-factor` has no effect on it though. Without an index, speed it up with `--threads`, or diff with `-a hashdiff` and a lower `--bisection-factor`, which was much faster on the identical tables of the benchmark above.
+
+### PostgreSQL: string (text, varchar) key columns
+
+Like MySQL (above), PostgreSQL orders strings by a collation: the column's, or else the database's default. The `C` and `POSIX` locales order by code point, like namidiff. Many installs and managed services default to a linguistic locale though, such as `en_US.UTF-8` or an ICU locale, where the keys `0a A_ a1 B b2 C M- m0 _x Z9` order as `_x 0a A_ a1 B b2 C M- m0 Z9` (ICU) or `0a A_ a1 B b2 C M- m0 _x Z9` (glibc). Diffs against another database then report rows as missing or extra that are not, or fail with `min_key expected to be smaller than max_key`.
+
+namidiff reads each key column's collation from `information_schema.columns`, and the database's default from `pg_database` for columns that use it. Key columns in a collation that orders by code point are used as they are: `C`, `POSIX`, `C.UTF-8`, `ucs_basic`, and the builtin `pg_c_utf8` and `pg_unicode_fast` (PostgreSQL 17+). Any other collation is compared as `id COLLATE "C"`, in namidiff's queries only: nothing in the database changes, and read access is enough. UUID keys are not affected.
+
+#### What it costs
+
+The planner can only use an index for `id COLLATE "C"` if the index has the same collation, so an index on the column in its own collation is not used, and every segment query scans the table. namidiff logs a warning with the exact expression, once per key column. To keep the index usable without changing the column, add an index in the `C` collation:
+
+```sql
+CREATE INDEX orders_id_c ON orders (id COLLATE "C");
+```
+
+The planner then uses it for the segment queries and for min/max. `text_pattern_ops` indexes don't help here: they only serve `LIKE` and the `~<~` operators. Alternatively, give the key column the `C` collation (`ALTER TABLE orders ALTER COLUMN id TYPE varchar(36) COLLATE "C"`), if the application can live with code point order.
+
+Without an index, a lower `--bisection-factor` and more `--threads` help, as for MySQL.
+
+#### Notes
+
+- Databases created with an ICU locale (PostgreSQL 15+) also have an `LC_COLLATE` (often `C` or `C.UTF-8`) that doesn't apply to their strings. namidiff reads the provider, and treats them as ICU.
+- On Alpine-based images (musl), every libc locale orders by code point, but namidiff can't tell from the locale's name, so it still compares `en_US.utf8` columns with `COLLATE "C"`. The result is correct, only the index advice above applies.
+- Redshift has no locales: strings compare by bytes, and namidiff leaves its keys alone. Databases or columns created with `COLLATE CASE_INSENSITIVE` order `a1` before `B`, and are not supported for string keys yet.
+
 ### Oracle: thin and thick mode
 
 namidiff connects to Oracle with [python-oracledb](https://python-oracledb.readthedocs.io/), the successor of `cx_Oracle`. `cx_Oracle` is no longer maintained and does not install on Python 3.12+. `pip install namidiff[oracle]` installs `oracledb`; `cx_Oracle` is not needed any more and can be uninstalled.
