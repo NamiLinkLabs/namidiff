@@ -12,11 +12,6 @@ on:
       - 'docs/**'
       - 'namidiff/**'
       - '.github/workflows/docs.yml'
-  pull_request:
-    paths:
-      - 'docs/**'
-      - 'namidiff/**'
-      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
