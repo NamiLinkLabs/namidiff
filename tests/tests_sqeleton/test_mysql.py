@@ -6,6 +6,7 @@ from namidiff.databases.mysql import MySQL as NamidiffMySQL
 from namidiff.sqeleton import connect
 from namidiff.sqeleton import databases as db
 from namidiff.sqeleton.abcs.database_types import (
+    Boolean,
     Timestamp,
     Text,
     Integer,
@@ -41,6 +42,12 @@ class TestMySQLDialect(unittest.TestCase):
         assert d.optimizer_hints("X") == "/*+ X */ "
         sql = d.normalize_timestamp("ts", Timestamp(precision=3, rounds=True))
         assert "datetime(3)" in sql and "datetime(6)" in sql
+
+    def test_bit_is_boolean(self):
+        d = Dialect.load_mixins(AbstractMixin_NormalizeValue)
+        coltype = d.parse_type(("t",), "b", "bit", numeric_precision=1)
+        assert isinstance(coltype, Boolean)
+        assert d.normalize_value_by_type("b", coltype) == "cast(cast(b as unsigned) as char)"
 
     def test_requires_database(self):
         with self.assertRaisesRegex(ValueError, "must specify a database"):
